@@ -2,6 +2,7 @@ package messages
 
 type Provider interface {
 	SendMessage(configs ...MessageConfig) error
+	IsEnabled() bool
 }
 
 type ProviderGroup struct {

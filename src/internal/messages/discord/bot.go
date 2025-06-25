@@ -8,10 +8,11 @@ import (
 type DiscordBot struct {
 	providerName string
 
-	bot *discordgo.Session
+	bot     *discordgo.Session
+	enabled bool
 }
 
-func NewDiscordBot(token string) (*DiscordBot, error) {
+func NewDiscordBot(token string, enabled bool) (*DiscordBot, error) {
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return nil, err
@@ -20,6 +21,7 @@ func NewDiscordBot(token string) (*DiscordBot, error) {
 	return &DiscordBot{
 		providerName: "discord",
 		bot:          dg,
+		enabled:      enabled,
 	}, nil
 }
 
@@ -29,16 +31,15 @@ func (b *DiscordBot) SendMessage(configs ...messages.MessageConfig) error {
 			continue
 		}
 
-		channel, ok := c.Channel.(string)
-		if !ok {
-			continue
-		}
-
-		_, err := b.bot.ChannelMessageSend(channel, c.Text)
+		_, err := b.bot.ChannelMessageSend(c.Channel, c.Text)
 		if err != nil {
 			return err
 		}
 	}
 
 	return discordgo.ErrNilState
+}
+
+func (d *DiscordBot) IsEnabled() bool {
+	return d.enabled
 }

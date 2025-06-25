@@ -1,6 +1,8 @@
 package telegram
 
 import (
+	"strconv"
+
 	"github.com/Formula-SAE/discord/src/internal/messages"
 
 	tapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -9,10 +11,11 @@ import (
 type TelegramBot struct {
 	providerName string
 
-	bot *tapi.BotAPI
+	bot     *tapi.BotAPI
+	enabled bool
 }
 
-func NewTelegramBot(token string) (*TelegramBot, error) {
+func NewTelegramBot(token string, enabled bool) (*TelegramBot, error) {
 	bot, err := tapi.NewBotAPI(token)
 	if err != nil {
 		return nil, err
@@ -21,6 +24,7 @@ func NewTelegramBot(token string) (*TelegramBot, error) {
 	return &TelegramBot{
 		bot:          bot,
 		providerName: "telegram",
+		enabled:      enabled,
 	}, nil
 }
 
@@ -30,15 +34,19 @@ func (t *TelegramBot) SendMessage(configs ...messages.MessageConfig) error {
 			continue
 		}
 
-		chatID, ok := c.Channel.(int64)
-		if !ok {
+		chatID, err := strconv.Atoi(c.Channel)
+		if err != nil {
 			continue
 		}
 
-		msg := tapi.NewMessage(chatID, c.Text)
-		_, err := t.bot.Send(msg)
+		msg := tapi.NewMessage(int64(chatID), c.Text)
+		_, err = t.bot.Send(msg)
 		return err
 	}
 
 	return nil
+}
+
+func (t *TelegramBot) IsEnabled() bool {
+	return t.enabled
 }
