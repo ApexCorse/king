@@ -2,3 +2,5 @@
 .DS_Store
 
 bin
+falkie.db
+.mock
