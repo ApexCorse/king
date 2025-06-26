@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/Formula-SAE/discord/src/config"
 	"github.com/Formula-SAE/discord/src/internal/api"
 	"github.com/Formula-SAE/discord/src/internal/messages"
 	d "github.com/Formula-SAE/discord/src/internal/messages/discord"
@@ -13,6 +12,8 @@ import (
 	"github.com/gorilla/mux"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
 func main() {
@@ -23,20 +24,23 @@ func main() {
 	discordEnabled := os.Getenv("DISCORD_ENABLED")
 	address := os.Getenv("ADDRESS")
 	masterToken := os.Getenv("MASTER_TOKEN")
+	dbUrl := os.Getenv("DB_URL")
 	if masterToken == "" {
 		panic("env: MASTER_TOKEN not specified")
+	}
+
+	if dbUrl == "" {
+		panic("env: DB_URL not specified")
 	}
 
 	if address == "" {
 		address = ":8080"
 	}
 
-	err := config.CreateDBFileIfNotExists()
-	if err != nil {
-		panic(fmt.Sprintf("error creating DB: %s", err.Error()))
-	}
-
-	db, err := gorm.Open(sqlite.Open("falkie.db"))
+	db, err := gorm.Open(sqlite.New(sqlite.Config{
+		DriverName: "libsql",
+		DSN: dbUrl,
+	}))
 	if err != nil {
 		panic(err)
 	}
