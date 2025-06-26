@@ -1,1 +1,2 @@
-# Discord Bot for Apex Corse
+# Multi-purpose, multi-platform bot for Apex Corse
+
