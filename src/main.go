@@ -21,6 +21,11 @@ func main() {
 	telegramEnabled := os.Getenv("TELEGRAM_ENABLED")
 	discordEnabled := os.Getenv("DISCORD_ENABLED")
 	address := os.Getenv("ADDRESS")
+	masterToken := os.Getenv("MASTER_TOKEN")
+	if masterToken == "" {
+		panic("env: MASTER_TOKEN not specified")
+	}
+
 	if address == "" {
 		address = ":8080"
 	}
@@ -47,7 +52,7 @@ func main() {
 	providerGroup := messages.NewProviderGroup(telegram, discord)
 
 	log.Printf("Starting server on port %s\n", address)
-	api := api.NewAPI(address, router, db, providerGroup)
+	api := api.NewAPI(address, router, db, providerGroup, masterToken)
 
 	api.Start()
 }
