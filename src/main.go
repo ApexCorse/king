@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -35,12 +36,12 @@ func main() {
 
 	telegram, err := t.NewTelegramBot(telegramToken, telegramEnabled == "true")
 	if err != nil {
-		panic("can't create telegram bot")
+		panic(fmt.Sprintf("can't create telegram bot: %s\n", err.Error()))
 	}
 
 	discord, err := d.NewDiscordBot(discordToken, discordEnabled == "true")
 	if err != nil {
-		panic("can't create discord bot")
+		panic(fmt.Sprintf("can't create discord bot: %s\n", err.Error()))
 	}
 
 	providerGroup := messages.NewProviderGroup(telegram, discord)
