@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/Formula-SAE/discord/src/config"
 	"github.com/Formula-SAE/discord/src/internal/api"
 	"github.com/Formula-SAE/discord/src/internal/messages"
 	d "github.com/Formula-SAE/discord/src/internal/messages/discord"
@@ -28,6 +29,11 @@ func main() {
 
 	if address == "" {
 		address = ":8080"
+	}
+
+	err := config.CreateDBFileIfNotExists()
+	if err != nil {
+		panic(fmt.Sprintf("error creating DB: %s", err.Error()))
 	}
 
 	db, err := gorm.Open(sqlite.Open("falkie.db"))
