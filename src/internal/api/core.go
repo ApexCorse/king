@@ -14,6 +14,8 @@ type API struct {
 	db      *gorm.DB
 
 	providerGroup *messages.ProviderGroup
+
+	masterToken string
 }
 
 func NewAPI(
@@ -21,12 +23,20 @@ func NewAPI(
 	router *mux.Router,
 	db *gorm.DB,
 	providerGroup *messages.ProviderGroup,
+	masterToken string,
 ) *API {
-	return &API{router: router, db: db, providerGroup: providerGroup, address: address}
+	return &API{
+		router:        router,
+		db:            db,
+		providerGroup: providerGroup,
+		address:       address,
+		masterToken:   masterToken,
+	}
 }
 
 func (a *API) initRoutes() {
-	a.router.HandleFunc("/on-push", a.handleOnPush)
+	a.router.HandleFunc("/on-push", a.handleOnPush).Methods("POST")
+	a.router.HandleFunc("/token", a.addTokenToDB).Methods("POST")
 }
 
 func (a *API) Start() {

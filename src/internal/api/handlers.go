@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/Formula-SAE/discord/src/internal/messages"
 )
@@ -17,24 +16,26 @@ type PushRequestBody struct {
 	} `json:"providers"`
 }
 
-func (a *API) handleOnPush(w http.ResponseWriter, r *http.Request) {
-	authorization := r.Header.Get("Authorization")
+type AddTokenRequestBody struct {
+	Token string `json:"token"`
+}
 
-	token := strings.Split(authorization, " ")
-	if token[0] != "Bearer" || len(token) != 2 {
-		err := errors.New("invalid token")
+func (a *API) handleOnPush(w http.ResponseWriter, r *http.Request) {
+	token, err := getAuthorization(r)
+
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	if !a.authorizeToken(token[1]) {
+	if !a.authorizeToken(token) {
 		err := errors.New("token not authorized")
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
 	body := &PushRequestBody{}
-	err := json.NewDecoder(r.Body).Decode(body)
+	err = json.NewDecoder(r.Body).Decode(body)
 	if err != nil {
 		err = errors.New("invalid input")
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -62,4 +63,48 @@ func (a *API) handleOnPush(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
+}
+
+func (a *API) addTokenToDB(w http.ResponseWriter, r *http.Request) {
+	token, err := getAuthorization(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	if token != a.masterToken {
+		err = errors.New("invalid token")
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	body := &AddTokenRequestBody{}
+	err = json.NewDecoder(r.Body).Decode(body)
+	if err != nil || body.Token == "" {
+		err = errors.New("bad request")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	savedToken := &Token{Token: body.Token}
+	result := a.db.Create(savedToken)
+
+	if result.Error != nil {
+		err = errors.New("operation failed")
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	response := map[string]string{
+		"message": "Token created",
+	}
+	bytes, err := json.Marshal(response)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	w.Write(bytes)
 }
