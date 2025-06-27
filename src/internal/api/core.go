@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/Formula-SAE/discord/src/internal/messages"
@@ -35,6 +36,7 @@ func NewAPI(
 }
 
 func (a *API) initRoutes() {
+	log.Println("Initializing routes...")
 	a.router.HandleFunc("/on-push", a.handleOnPush).Methods("POST")
 	a.router.HandleFunc("/token", a.addTokenToDB).Methods("POST")
 }

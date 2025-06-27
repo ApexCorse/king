@@ -1,6 +1,8 @@
 package discord
 
 import (
+	"log"
+
 	"github.com/Formula-SAE/discord/src/internal/messages"
 	"github.com/bwmarrin/discordgo"
 )
@@ -31,13 +33,17 @@ func (b *DiscordBot) SendMessage(configs ...messages.MessageConfig) error {
 			continue
 		}
 
+		log.Printf("Channel: %s\nMessage: %s\n", c.Channel, c.Text)
 		_, err := b.bot.ChannelMessageSend(c.Channel, c.Text)
+
 		if err != nil {
-			return err
+			log.Printf("Error sending message to channel %s: %s\n", c.Channel, err.Error())
+		} else {
+			log.Printf("Sent message to channel %s\n", c.Channel)
 		}
 	}
 
-	return discordgo.ErrNilState
+	return nil
 }
 
 func (d *DiscordBot) IsEnabled() bool {

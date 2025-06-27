@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/Formula-SAE/discord/src/internal/messages"
@@ -24,26 +25,31 @@ func (a *API) handleOnPush(w http.ResponseWriter, r *http.Request) {
 	token, err := getAuthorization(r)
 
 	if err != nil {
+		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
 	if !a.authorizeToken(token) {
 		err := errors.New("token not authorized")
+		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
 	body := &PushRequestBody{}
 	err = json.NewDecoder(r.Body).Decode(body)
+	log.Printf("Request: %+v\n", body)
 	if err != nil {
 		err = errors.New("invalid input")
+		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if body.Content == "" || len(body.Providers) == 0 {
 		err = errors.New("empty message or no providers")
+		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -59,6 +65,8 @@ func (a *API) handleOnPush(w http.ResponseWriter, r *http.Request) {
 		messageConfigs = append(messageConfigs, config)
 	}
 
+	log.Printf("Message configurations: %+v\n", messageConfigs)
+
 	a.providerGroup.SendMessage(messageConfigs...)
 
 	w.WriteHeader(http.StatusOK)
@@ -67,19 +75,24 @@ func (a *API) handleOnPush(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) addTokenToDB(w http.ResponseWriter, r *http.Request) {
 	token, err := getAuthorization(r)
+
 	if err != nil {
+		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
 	if token != a.masterToken {
 		err = errors.New("invalid token")
+		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
 	body := &AddTokenRequestBody{}
 	err = json.NewDecoder(r.Body).Decode(body)
+	log.Printf("Request: %+v\n", body)
+
 	if err != nil || body.Token == "" {
 		err = errors.New("bad request")
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -91,9 +104,11 @@ func (a *API) addTokenToDB(w http.ResponseWriter, r *http.Request) {
 
 	if result.Error != nil {
 		err = errors.New("operation failed")
+		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
+	log.Printf("Created token in DB: %s\n", savedToken.Token)
 
 	response := map[string]string{
 		"message": "Token created",
