@@ -49,6 +49,7 @@ func (t *TelegramBot) SendMessage(configs ...messages.MessageConfig) error {
 
 		log.Printf("ChatID: %d\nMessage: %s\n", chatID, c.Text)
 		msg := tapi.NewMessage(int64(chatID), c.Text)
+		msg.ParseMode = "HTML"
 
 		_, err = t.bot.Send(msg)
 		if err != nil {
