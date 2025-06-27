@@ -7,6 +7,6 @@ services:
     env_file: .env
     environment:
       ADDRESS: ":8080"
-    #! CREATE 'falkie.db' BEFORE CREATING CONTAINER
+    #! CREATE 'king.db' BEFORE CREATING CONTAINER
     volumes:
-      - "./falkie.db:/opt/falkie/falkie.db"
+      - "./king.db:/opt/king/king.db"
