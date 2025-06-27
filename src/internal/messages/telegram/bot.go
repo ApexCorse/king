@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"log"
 	"strconv"
 
 	"github.com/Formula-SAE/discord/src/internal/messages"
@@ -21,6 +22,12 @@ func NewTelegramBot(token string, enabled bool) (*TelegramBot, error) {
 		return nil, err
 	}
 
+	if enabled {
+		log.Println("Telegram enabled")
+	} else {
+		log.Println("Telegram not enabled")
+	}
+
 	return &TelegramBot{
 		bot:          bot,
 		providerName: "telegram",
@@ -36,12 +43,19 @@ func (t *TelegramBot) SendMessage(configs ...messages.MessageConfig) error {
 
 		chatID, err := strconv.Atoi(c.Channel)
 		if err != nil {
+			log.Printf("Chat ID %s not valid: %s\n", c.Channel, err.Error())
 			continue
 		}
 
+		log.Printf("ChatID: %d\nMessage: %s\n", chatID, c.Text)
 		msg := tapi.NewMessage(int64(chatID), c.Text)
+
 		_, err = t.bot.Send(msg)
-		return err
+		if err != nil {
+			log.Printf("Error sending message to chat %d: %s\n", chatID, err.Error())
+		} else {
+			log.Printf("Sent message to chat %d\n", chatID)
+		}
 	}
 
 	return nil

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -26,14 +25,15 @@ func main() {
 	masterToken := os.Getenv("MASTER_TOKEN")
 	dbUrl := os.Getenv("DB_URL")
 	if masterToken == "" {
-		panic("env: MASTER_TOKEN not specified")
+		log.Fatalln("env: MASTER_TOKEN not specified")
 	}
 
 	if dbUrl == "" {
-		panic("env: DB_URL not specified")
+		log.Fatalln("env: DB_URL not specified")
 	}
 
 	if address == "" {
+		log.Println("Address not specified, setting to :8080")
 		address = ":8080"
 	}
 
@@ -42,21 +42,23 @@ func main() {
 		DSN: dbUrl,
 	}))
 	if err != nil {
-		panic(err)
+		log.Fatalf("Can't create db connection: %s\n", err.Error())
 	}
 
+	log.Println("Auto-migrating db via GORM...")
 	db.AutoMigrate(&api.Token{})
 
+	log.Println("Creating router...")
 	router := mux.NewRouter()
 
 	telegram, err := t.NewTelegramBot(telegramToken, telegramEnabled == "true")
 	if err != nil {
-		panic(fmt.Sprintf("can't create telegram bot: %s\n", err.Error()))
+		log.Fatalf("Can't create telegram bot: %s\n", err.Error())
 	}
 
 	discord, err := d.NewDiscordBot(discordToken, discordEnabled == "true")
 	if err != nil {
-		panic(fmt.Sprintf("can't create discord bot: %s\n", err.Error()))
+		log.Fatalf("Can't create discord bot: %s\n", err.Error())
 	}
 
 	providerGroup := messages.NewProviderGroup(telegram, discord)
