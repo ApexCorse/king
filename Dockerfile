@@ -1,6 +1,6 @@
 FROM golang:bullseye
 
-WORKDIR /opt/falkie
+WORKDIR /opt/king
 
 COPY go.mod go.sum ./
 RUN go mod download
