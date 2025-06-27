@@ -1,0 +1,16 @@
+name: Notify on push
+
+on:
+  push:
+  
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Formula-SAE/on-push-action@v1
+        with:
+          event: ${{ toJson(github.event) }}
+          apiToken: ${{ secrets.API_TOKEN }}
+          apiUrl: ${{ secrets.API_URL }}
+          providers: ${{ secrets.PROVIDERS }}
