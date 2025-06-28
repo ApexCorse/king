@@ -13,3 +13,4 @@ jobs:
           apiToken: ${{ secrets.API_TOKEN }}
           apiUrl: ${{ secrets.API_URL }}
           providers: ${{ secrets.PROVIDERS }}
+          refName: ${{ github.ref_name }}
