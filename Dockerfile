@@ -1,4 +1,4 @@
-FROM golang:bullseye
+FROM golang:bullseye AS builder
 
 WORKDIR /opt/king
 
@@ -8,6 +8,18 @@ RUN go mod download
 COPY . .
 RUN go build -o ./bin/main ./src/main.go
 
-RUN chmod +x ./bin/main
+FROM debian:bullseye-slim
+
+WORKDIR /opt/king
+
+# Install dependencies needed for CGO libraries and HTTP requests (ca-certificates)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \ 
+        libc6 \
+        libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/king/bin/main ./bin/main
 
 CMD ["./bin/main"]
