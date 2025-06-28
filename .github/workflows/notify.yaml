@@ -7,7 +7,7 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - uses: Formula-SAE/on-push-action@v1
+      - uses: Formula-SAE/notify-push@v1.2
         with:
           event: ${{ toJson(github.event) }}
           apiToken: ${{ secrets.API_TOKEN }}
