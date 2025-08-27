@@ -29,8 +29,10 @@ func (b *DiscordBot) Start() (func() error, error) {
 		return nil, fmt.Errorf("failed to open Discord session: %v", err)
 	}
 
+	fmt.Printf("[bot] Discord session opened successfully\n")
 	b.session.AddHandler(b.createTaskCommand)
 	b.session.AddHandler(b.getAssignedTasks)
+	fmt.Printf("[bot] Command handlers registered\n")
 
 	commands := []*discordgo.ApplicationCommand{
 		{
@@ -68,6 +70,7 @@ func (b *DiscordBot) Start() (func() error, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create application command: %v", err)
 		}
+		fmt.Printf("[bot] Created command: %s\n", command.Name)
 	}
 
 	return b.session.Close, nil
