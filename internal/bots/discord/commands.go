@@ -17,7 +17,10 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		return
 	}
 
+	fmt.Printf("[create-task] Command executed by user %s\n", i.Member.User.Username)
+
 	if len(i.ApplicationCommandData().Options) != 3 {
+		fmt.Printf("[create-task] Invalid number of options provided: %d\n", len(i.ApplicationCommandData().Options))
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -30,6 +33,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	if i.ApplicationCommandData().Options[0].Name != "title" ||
 		i.ApplicationCommandData().Options[1].Name != "description" ||
 		i.ApplicationCommandData().Options[2].Name != "assignee" {
+		fmt.Printf("[create-task] Invalid option names provided\n")
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -42,6 +46,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	if i.ApplicationCommandData().Options[0].Type != discordgo.ApplicationCommandOptionString ||
 		i.ApplicationCommandData().Options[1].Type != discordgo.ApplicationCommandOptionString ||
 		i.ApplicationCommandData().Options[2].Type != discordgo.ApplicationCommandOptionUser {
+		fmt.Printf("[create-task] Invalid option types provided\n")
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -65,6 +70,8 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	title := i.ApplicationCommandData().Options[0].StringValue()
 	description := i.ApplicationCommandData().Options[1].StringValue()
 	assigneeDiscordID := i.ApplicationCommandData().Options[2].UserValue(s).ID
+
+	fmt.Printf("[create-task] Creating task with title: %s, description: %s, assignee: %s\n", title, description, assigneeDiscordID)
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -98,6 +105,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	)
 
 	if err != nil {
+		fmt.Printf("[create-task] Failed to create task: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -113,6 +121,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	*Assignee*: <@%s>`,
 		title, description, assigneeDiscordID)
 
+	fmt.Printf("[create-task] Task created successfully with ID: %d\n", task.ID)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -131,6 +140,7 @@ func (b *DiscordBot) getAssignedTasks(s *discordgo.Session, i *discordgo.Interac
 	}
 
 	if i.Member == nil || i.Member.User == nil {
+		fmt.Printf("[assigned-tasks] User is not a member of the server\n")
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -140,9 +150,11 @@ func (b *DiscordBot) getAssignedTasks(s *discordgo.Session, i *discordgo.Interac
 		return
 	}
 
+	fmt.Printf("[assigned-tasks] Command executed by user %s\n", i.Member.User.Username)
 	userDiscordID := i.Member.User.ID
 	tasks, err := b.db.GetAssignedTasksByUserDiscordID(userDiscordID)
 	if err != nil {
+		fmt.Printf("[assigned-tasks] Failed to get assigned tasks: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -161,6 +173,7 @@ func (b *DiscordBot) getAssignedTasks(s *discordgo.Session, i *discordgo.Interac
 		`, task.Title, task.Description, task.Author.DiscordID)
 	}
 
+	fmt.Printf("[assigned-tasks] Retrieved %d tasks for user %s\n", len(tasks), userDiscordID)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
