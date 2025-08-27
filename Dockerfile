@@ -6,7 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -o ./bin/main ./src/main.go
+RUN go build -o ./bin/main ./cmd/main.go
 
 FROM debian:bullseye-slim
 
