@@ -1,6 +1,10 @@
 package db
 
-import "gorm.io/gorm"
+import (
+	"database/sql"
+
+	"gorm.io/gorm"
+)
 
 type User struct {
 	gorm.Model
@@ -17,11 +21,12 @@ type Task struct {
 
 	Title       string
 	Description string
+	Role        string
 
 	AuthorID uint
 	Author   User
 
-	AssignedUserID uint
+	AssignedUserID sql.NullInt64
 	AssignedUser   User
 
 	Comments []TaskComment
