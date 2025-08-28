@@ -3,8 +3,10 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"slices"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type DB struct {
@@ -91,7 +93,9 @@ func (d *DB) GetAssignedTasksByUserDiscordID(userID string) ([]Task, error) {
 		return nil, err
 	}
 
-	if err := d.db.Preload("Author").Preload("AssignedUser").Where("assigned_user_id = ?", int64(user.ID)).Find(&tasks).Error; err != nil {
+	if err := d.db.Preload("Author").Preload("AssignedUser").
+		Where("assigned_user_id = ? AND status != ?", int64(user.ID), TASK_COMPLETED).
+		Find(&tasks).Error; err != nil {
 		return nil, err
 	}
 
@@ -108,12 +112,27 @@ func (d *DB) GetTaskByID(id int64) (*Task, error) {
 	return task, nil
 }
 
+func (d *DB) GetCompletedTasksByRole(role string) ([]Task, error) {
+	tasks := make([]Task, 0)
+	if role == "" {
+		return nil, fmt.Errorf("role cannot be empty")
+	}
+	if err := d.db.Preload("Author").Preload("AssignedUser").
+		Where("role = ? AND status = ?", role, TASK_COMPLETED).
+		Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
 func (d *DB) GetTasksByRole(role string) ([]Task, error) {
 	tasks := make([]Task, 0)
 	if role == "" {
 		return nil, fmt.Errorf("role cannot be empty")
 	}
-	if err := d.db.Preload("Author").Preload("AssignedUser").Where("role = ?", role).Find(&tasks).Error; err != nil {
+	if err := d.db.Preload("Author").Preload("AssignedUser").
+		Where("role = ? AND status != ?", role, TASK_COMPLETED).
+		Find(&tasks).Error; err != nil {
 		return nil, err
 	}
 	return tasks, nil
@@ -125,7 +144,7 @@ func (d *DB) GetUnassignedTasksByRole(role string) ([]Task, error) {
 		return nil, fmt.Errorf("role cannot be empty")
 	}
 	if err := d.db.Preload("Author").Preload("AssignedUser").
-		Where("role = ? AND assigned_user_id IS NULL", role).
+		Where("role = ? AND assigned_user_id IS NULL AND status != ?", role, TASK_COMPLETED).
 		Find(&tasks).Error; err != nil {
 		return nil, err
 	}
@@ -138,4 +157,25 @@ func (d *DB) AssignTask(taskID int64, userID int64) error {
 	}
 
 	return nil
+}
+
+func (d *DB) UpdateTaskStatus(taskID int64, status string) (*Task, error) {
+	validStatuses := []string{TASK_NOT_STARTED, TASK_IN_PROGRESS, TASK_COMPLETED}
+	isValid := slices.Contains(validStatuses, status)
+
+	if !isValid {
+		return nil, fmt.Errorf("invalid status '%s'. Valid statuses are: %s, %s, %s",
+			status, TASK_NOT_STARTED, TASK_IN_PROGRESS, TASK_COMPLETED)
+	}
+
+	task := &Task{}
+
+	if err := d.db.Model(task).
+		Clauses(clause.Returning{}).
+		Where("id = ?", taskID).
+		Update("status", status).Error; err != nil {
+		return nil, fmt.Errorf("failed to update task status: %w", err)
+	}
+
+	return task, nil
 }
