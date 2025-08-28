@@ -1228,3 +1228,658 @@ func TestAssignTask(t *testing.T) {
 		assert.Equal(t, int64(-1), retrievedTask.AssignedUserID.Int64)
 	})
 }
+
+func TestUpdateTaskStatus(t *testing.T) {
+	t.Run("successful status update to Not Started", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create user
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		// Create task with default status
+		task := &Task{
+			Title:       "Test Task",
+			Description: "Test Description",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "")
+		require.NoError(t, err)
+
+		// Update status to "Not Started"
+		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_NOT_STARTED)
+		assert.NoError(t, err)
+		assert.NotNil(t, updatedTask)
+		assert.Equal(t, TASK_NOT_STARTED, updatedTask.Status)
+
+		// Verify the update in database
+		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		require.NoError(t, err)
+		assert.Equal(t, TASK_NOT_STARTED, retrievedTask.Status)
+	})
+
+	t.Run("successful status update to In Progress", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create user
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		// Create task
+		task := &Task{
+			Title:       "Test Task",
+			Description: "Test Description",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "")
+		require.NoError(t, err)
+
+		// Update status to "In Progress"
+		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_IN_PROGRESS)
+		assert.NoError(t, err)
+		assert.NotNil(t, updatedTask)
+		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
+
+		// Verify the update in database
+		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		require.NoError(t, err)
+		assert.Equal(t, TASK_IN_PROGRESS, retrievedTask.Status)
+	})
+
+	t.Run("successful status update to Completed", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create user
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		// Create task
+		task := &Task{
+			Title:       "Test Task",
+			Description: "Test Description",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "")
+		require.NoError(t, err)
+
+		// Update status to "Completed"
+		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_COMPLETED)
+		assert.NoError(t, err)
+		assert.NotNil(t, updatedTask)
+		assert.Equal(t, TASK_COMPLETED, updatedTask.Status)
+
+		// Verify the update in database
+		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		require.NoError(t, err)
+		assert.Equal(t, TASK_COMPLETED, retrievedTask.Status)
+	})
+
+	t.Run("status update preserves other task fields", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create task with all fields populated
+		task := &Task{
+			Title:       "Complex Task",
+			Description: "Complex Description",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
+		require.NoError(t, err)
+
+		// Update status
+		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_IN_PROGRESS)
+		assert.NoError(t, err)
+		assert.NotNil(t, updatedTask)
+
+		// Verify all other fields are preserved
+		assert.Equal(t, task.Title, updatedTask.Title)
+		assert.Equal(t, task.Description, updatedTask.Description)
+		assert.Equal(t, task.Role, updatedTask.Role)
+		assert.Equal(t, task.AuthorID, updatedTask.AuthorID)
+		assert.Equal(t, task.AssignedUserID, updatedTask.AssignedUserID)
+		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
+	})
+
+	t.Run("invalid status should return error", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create user
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		// Create task
+		task := &Task{
+			Title:       "Test Task",
+			Description: "Test Description",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "")
+		require.NoError(t, err)
+
+		// Try to update with invalid status
+		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), "Invalid Status")
+		assert.Error(t, err)
+		assert.Nil(t, updatedTask)
+		assert.Contains(t, err.Error(), "invalid status")
+		assert.Contains(t, err.Error(), TASK_NOT_STARTED)
+		assert.Contains(t, err.Error(), TASK_IN_PROGRESS)
+		assert.Contains(t, err.Error(), TASK_COMPLETED)
+
+		// Verify task status was not changed
+		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		require.NoError(t, err)
+		assert.Equal(t, TASK_NOT_STARTED, retrievedTask.Status) // Default status
+	})
+
+	t.Run("case sensitive status validation", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create user
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		// Create task
+		task := &Task{
+			Title:       "Test Task",
+			Description: "Test Description",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "")
+		require.NoError(t, err)
+
+		// Try to update with lowercase status
+		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), "not started")
+		assert.Error(t, err)
+		assert.Nil(t, updatedTask)
+		assert.Contains(t, err.Error(), "invalid status")
+
+		// Try to update with mixed case status
+		updatedTask, err = db.UpdateTaskStatus(int64(task.ID), "in progress")
+		assert.Error(t, err)
+		assert.Nil(t, updatedTask)
+		assert.Contains(t, err.Error(), "invalid status")
+
+		// Verify task status was not changed
+		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		require.NoError(t, err)
+		assert.Equal(t, TASK_NOT_STARTED, retrievedTask.Status) // Default status
+	})
+
+	t.Run("non-existent task should return empty task object", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Try to update non-existent task
+		updatedTask, err := db.UpdateTaskStatus(999, TASK_IN_PROGRESS)
+		assert.NoError(t, err) // The method doesn't validate task existence
+		assert.NotNil(t, updatedTask)
+		assert.Equal(t, uint(0), updatedTask.ID) // Empty task object
+		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
+	})
+
+	t.Run("zero task ID should return empty task object", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Try to update task with zero ID
+		updatedTask, err := db.UpdateTaskStatus(0, TASK_IN_PROGRESS)
+		assert.NoError(t, err) // The method doesn't validate task existence
+		assert.NotNil(t, updatedTask)
+		assert.Equal(t, uint(0), updatedTask.ID) // Empty task object
+		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
+	})
+
+	t.Run("negative task ID should return empty task object", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Try to update task with negative ID
+		updatedTask, err := db.UpdateTaskStatus(-1, TASK_IN_PROGRESS)
+		assert.NoError(t, err) // The method doesn't validate task existence
+		assert.NotNil(t, updatedTask)
+		assert.Equal(t, uint(0), updatedTask.ID) // Empty task object
+		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
+	})
+
+	t.Run("empty status should return error", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create user
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		// Create task
+		task := &Task{
+			Title:       "Test Task",
+			Description: "Test Description",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "")
+		require.NoError(t, err)
+
+		// Try to update with empty status
+		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), "")
+		assert.Error(t, err)
+		assert.Nil(t, updatedTask)
+		assert.Contains(t, err.Error(), "invalid status")
+	})
+
+	t.Run("multiple status updates on same task", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create user
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		// Create task
+		task := &Task{
+			Title:       "Test Task",
+			Description: "Test Description",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "")
+		require.NoError(t, err)
+
+		// Update status multiple times
+		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_IN_PROGRESS)
+		assert.NoError(t, err)
+		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
+
+		updatedTask, err = db.UpdateTaskStatus(int64(task.ID), TASK_COMPLETED)
+		assert.NoError(t, err)
+		assert.Equal(t, TASK_COMPLETED, updatedTask.Status)
+
+		updatedTask, err = db.UpdateTaskStatus(int64(task.ID), TASK_NOT_STARTED)
+		assert.NoError(t, err)
+		assert.Equal(t, TASK_NOT_STARTED, updatedTask.Status)
+
+		// Verify final status in database
+		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		require.NoError(t, err)
+		assert.Equal(t, TASK_NOT_STARTED, retrievedTask.Status)
+	})
+}
+
+func TestGetCompletedTasksByRole(t *testing.T) {
+	t.Run("successful retrieval of completed tasks by role", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create completed tasks with "developer" role
+		task1 := &Task{
+			Title:       "Completed Task 1",
+			Description: "First completed task",
+			Role:        "developer",
+			Status:      TASK_COMPLETED,
+		}
+		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
+		require.NoError(t, err)
+		// Update status to completed
+		_, err = db.UpdateTaskStatus(int64(task1.ID), TASK_COMPLETED)
+		require.NoError(t, err)
+
+		task2 := &Task{
+			Title:       "Completed Task 2",
+			Description: "Second completed task",
+			Role:        "developer",
+			Status:      TASK_COMPLETED,
+		}
+		err = db.CreateTaskWithUserDiscordID(task2, "author123", "assignee456")
+		require.NoError(t, err)
+		// Update status to completed
+		_, err = db.UpdateTaskStatus(int64(task2.ID), TASK_COMPLETED)
+		require.NoError(t, err)
+
+		// Create non-completed task with "developer" role
+		task3 := &Task{
+			Title:       "In Progress Task",
+			Description: "Task in progress",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task3, "author123", "assignee456")
+		require.NoError(t, err)
+		// Update status to in progress
+		_, err = db.UpdateTaskStatus(int64(task3.ID), TASK_IN_PROGRESS)
+		require.NoError(t, err)
+
+		// Create completed task with different role
+		task4 := &Task{
+			Title:       "Designer Completed Task",
+			Description: "Designer completed task",
+			Role:        "designer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task4, "author123", "assignee456")
+		require.NoError(t, err)
+		// Update status to completed
+		_, err = db.UpdateTaskStatus(int64(task4.ID), TASK_COMPLETED)
+		require.NoError(t, err)
+
+		// Retrieve completed tasks for "developer" role
+		tasks, err := db.GetCompletedTasksByRole("developer")
+		assert.NoError(t, err)
+		assert.Len(t, tasks, 2)
+
+		// Verify the tasks are the correct completed ones
+		taskIDs := make(map[uint]bool)
+		for _, task := range tasks {
+			taskIDs[task.ID] = true
+			assert.Equal(t, "developer", task.Role)
+			assert.Equal(t, TASK_COMPLETED, task.Status)
+			assert.Equal(t, author.Username, task.Author.Username)
+		}
+		assert.True(t, taskIDs[task1.ID])
+		assert.True(t, taskIDs[task2.ID])
+		assert.False(t, taskIDs[task3.ID]) // Should not be included (not completed)
+		assert.False(t, taskIDs[task4.ID]) // Should not be included (different role)
+	})
+
+	t.Run("no completed tasks for role", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create only non-completed tasks with "developer" role
+		task1 := &Task{
+			Title:       "In Progress Task 1",
+			Description: "First in progress task",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
+		require.NoError(t, err)
+		_, err = db.UpdateTaskStatus(int64(task1.ID), TASK_IN_PROGRESS)
+		require.NoError(t, err)
+
+		task2 := &Task{
+			Title:       "Not Started Task",
+			Description: "Not started task",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task2, "author123", "assignee456")
+		require.NoError(t, err)
+		// Keep default status (Not Started)
+
+		// Retrieve completed tasks for "developer" role
+		tasks, err := db.GetCompletedTasksByRole("developer")
+		assert.NoError(t, err)
+		assert.Empty(t, tasks)
+	})
+
+	t.Run("no tasks for role at all", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create completed tasks with different role
+		task1 := &Task{
+			Title:       "Designer Completed Task",
+			Description: "Designer completed task",
+			Role:        "designer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
+		require.NoError(t, err)
+		_, err = db.UpdateTaskStatus(int64(task1.ID), TASK_COMPLETED)
+		require.NoError(t, err)
+
+		// Retrieve completed tasks for "developer" role
+		tasks, err := db.GetCompletedTasksByRole("developer")
+		assert.NoError(t, err)
+		assert.Empty(t, tasks)
+	})
+
+	t.Run("empty role should return error", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Try to retrieve tasks with empty role
+		tasks, err := db.GetCompletedTasksByRole("")
+		assert.Error(t, err)
+		assert.Nil(t, tasks)
+		assert.Contains(t, err.Error(), "role cannot be empty")
+	})
+
+	t.Run("mixed roles with completed tasks", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create tasks with different roles and completion status
+		tasks := []struct {
+			title       string
+			description string
+			role        string
+			status      string
+		}{
+			{"Dev Completed 1", "Developer completed task", "developer", TASK_COMPLETED},
+			{"Dev Completed 2", "Developer completed task", "developer", TASK_COMPLETED},
+			{"Dev In Progress", "Developer in progress task", "developer", TASK_IN_PROGRESS},
+			{"Designer Completed", "Designer completed task", "designer", TASK_COMPLETED},
+			{"Designer In Progress", "Designer in progress task", "designer", TASK_IN_PROGRESS},
+			{"QA Completed", "QA completed task", "qa", TASK_COMPLETED},
+		}
+
+		createdTasks := make([]*Task, len(tasks))
+		for i, taskData := range tasks {
+			task := &Task{
+				Title:       taskData.title,
+				Description: taskData.description,
+				Role:        taskData.role,
+			}
+			err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
+			require.NoError(t, err)
+			_, err = db.UpdateTaskStatus(int64(task.ID), taskData.status)
+			require.NoError(t, err)
+			createdTasks[i] = task
+		}
+
+		// Test developer role (should get 2 completed tasks)
+		devTasks, err := db.GetCompletedTasksByRole("developer")
+		assert.NoError(t, err)
+		assert.Len(t, devTasks, 2)
+		for _, task := range devTasks {
+			assert.Equal(t, "developer", task.Role)
+			assert.Equal(t, TASK_COMPLETED, task.Status)
+		}
+
+		// Test designer role (should get 1 completed task)
+		designerTasks, err := db.GetCompletedTasksByRole("designer")
+		assert.NoError(t, err)
+		assert.Len(t, designerTasks, 1)
+		assert.Equal(t, "designer", designerTasks[0].Role)
+		assert.Equal(t, TASK_COMPLETED, designerTasks[0].Status)
+
+		// Test QA role (should get 1 completed task)
+		qaTasks, err := db.GetCompletedTasksByRole("qa")
+		assert.NoError(t, err)
+		assert.Len(t, qaTasks, 1)
+		assert.Equal(t, "qa", qaTasks[0].Role)
+		assert.Equal(t, TASK_COMPLETED, qaTasks[0].Status)
+	})
+
+	t.Run("case sensitive role matching", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create completed task with "Developer" role (capitalized)
+		task := &Task{
+			Title:       "Developer Completed Task",
+			Description: "Developer completed task",
+			Role:        "Developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
+		require.NoError(t, err)
+		_, err = db.UpdateTaskStatus(int64(task.ID), TASK_COMPLETED)
+		require.NoError(t, err)
+
+		// Try to retrieve with "developer" (lowercase)
+		tasks, err := db.GetCompletedTasksByRole("developer")
+		assert.NoError(t, err)
+		assert.Empty(t, tasks) // Should not match due to case sensitivity
+
+		// Try to retrieve with "Developer" (correct case)
+		tasks, err = db.GetCompletedTasksByRole("Developer")
+		assert.NoError(t, err)
+		assert.Len(t, tasks, 1)
+		assert.Equal(t, "Developer", tasks[0].Role)
+		assert.Equal(t, TASK_COMPLETED, tasks[0].Status)
+	})
+
+	t.Run("completed tasks with preloaded relationships", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create completed task
+		task := &Task{
+			Title:       "Completed Task with Assignee",
+			Description: "Task with assignee",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
+		require.NoError(t, err)
+		_, err = db.UpdateTaskStatus(int64(task.ID), TASK_COMPLETED)
+		require.NoError(t, err)
+
+		// Retrieve completed tasks and verify relationships are loaded
+		tasks, err := db.GetCompletedTasksByRole("developer")
+		assert.NoError(t, err)
+		assert.Len(t, tasks, 1)
+
+		retrievedTask := tasks[0]
+		assert.Equal(t, task.ID, retrievedTask.ID)
+		assert.Equal(t, author.Username, retrievedTask.Author.Username)
+		assert.Equal(t, assignee.Username, retrievedTask.AssignedUser.Username)
+		assert.True(t, retrievedTask.AssignedUserID.Valid)
+		assert.Equal(t, int64(assignee.ID), retrievedTask.AssignedUserID.Int64)
+		assert.Equal(t, TASK_COMPLETED, retrievedTask.Status)
+	})
+}

@@ -6,6 +6,12 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	TASK_NOT_STARTED = "Not Started"
+	TASK_IN_PROGRESS = "In Progress"
+	TASK_COMPLETED   = "Completed"
+)
+
 type User struct {
 	gorm.Model
 
@@ -22,6 +28,7 @@ type Task struct {
 	Title       string
 	Description string
 	Role        string
+	Status      string `gorm:"default:Not Started"`
 
 	AuthorID uint
 	Author   User

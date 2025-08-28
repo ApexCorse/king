@@ -135,6 +135,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 
 	fmt.Printf("[create-task] Task created successfully with ID: %d\n", task.ID)
 	respContent += fmt.Sprintf("\n*Task ID*: `%d`", task.ID)
+	respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -191,11 +192,13 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 
 	respContent := "📋 **Your assigned tasks:**\n"
 	for _, task := range tasks {
+		respContent += fmt.Sprintf("\n*ID*: %d", task.ID)
 		respContent += fmt.Sprintf("\n*Title*: %s", task.Title)
 		if task.Description != "" {
 			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
 		}
-		respContent += fmt.Sprintf("\n*Author*: <@%s>\n", task.Author.DiscordID)
+		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
+		respContent += fmt.Sprintf("\n*Status*: %s %s\n", getStatusIcon(task.Status), task.Status)
 	}
 
 	fmt.Printf("[assigned-tasks] Retrieved %d tasks for user %s\n", len(tasks), userDiscordID)
@@ -264,6 +267,7 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 		respContent += fmt.Sprintf("\n*Assigned to*: <@%s>", task.AssignedUser.DiscordID)
 	}
 	respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
+	respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
 
 	fmt.Printf("[get-task] Retrieved task %d: %s\n", task.ID, respContent)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -344,6 +348,7 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 		if task.AssignedUserID.Valid {
 			respContent += fmt.Sprintf("\n*Assigned to*: <@%s>", task.AssignedUser.DiscordID)
 		}
+		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
 		respContent += "\n"
 	}
 
@@ -423,6 +428,7 @@ func (b *DiscordBot) getUnassignedTasksCommandByRole(s *discordgo.Session, i *di
 			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
 		}
 		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
+		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
 		respContent += "\n"
 	}
 
@@ -511,4 +517,169 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Content: respContent,
 		},
 	})
+}
+
+func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	if i.ApplicationCommandData().Name != "update-task-status" {
+		return
+	}
+
+	options := i.ApplicationCommandData().Options
+	if len(options) != 2 {
+		fmt.Printf("[update-task-status] Invalid number of options provided: %d\n", len(options))
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ **Invalid options**\n\nYou must provide exactly two options (task ID and status).",
+			},
+		})
+		return
+	}
+
+	if options[0].Name != "task-id" && options[0].Type != discordgo.ApplicationCommandOptionInteger {
+		fmt.Printf("[update-task-status] Invalid option provided: %s\n", options[0].Name)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ **Invalid task ID**\n\nYou must provide a valid integer ID for the task.",
+			},
+		})
+		return
+	}
+
+	if options[1].Name != "status" && options[1].Type != discordgo.ApplicationCommandOptionString {
+		fmt.Printf("[update-task-status] Invalid option provided: %s\n", options[1].Name)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ **Invalid status**\n\nYou must provide a valid status string.",
+			},
+		})
+		return
+	}
+
+	taskID := options[0].IntValue()
+	status := options[1].StringValue()
+
+	task, err := b.db.UpdateTaskStatus(taskID, status)
+	if err != nil {
+		fmt.Printf("[update-task-status] Failed to update task status: %v\n", err)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("❌ **Failed to update task status**\n\n%s", err.Error()),
+			},
+		})
+		return
+	}
+
+	respContent := fmt.Sprintf("✅ **Task status updated successfully!**\n\n*Task ID*: `%d`\n*Title*: %s\n*New Status*: %s %s", taskID, task.Title, getStatusIcon(status), status)
+	fmt.Printf("[update-task-status] Task %d status updated to: %s\n", taskID, status)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: respContent,
+		},
+	})
+}
+
+func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	if i.ApplicationCommandData().Name != "completed-tasks-by-role" {
+		return
+	}
+
+	options := i.ApplicationCommandData().Options
+	if len(options) != 1 {
+		fmt.Printf("[completed-tasks-by-role] Invalid number of options provided: %d\n", len(options))
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ **Invalid options**\n\nYou must provide exactly one option (role).",
+			},
+		})
+		return
+	}
+
+	if options[0].Name != "role" && options[0].Type != discordgo.ApplicationCommandOptionRole {
+		fmt.Printf("[completed-tasks-by-role] Invalid option provided: %s\n", options[0].Name)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ **Invalid role**\n\nYou must provide a valid role.",
+			},
+		})
+		return
+	}
+
+	role := options[0].RoleValue(s, b.guildID).Name
+	tasks, err := b.db.GetCompletedTasksByRole(role)
+	if err != nil {
+		fmt.Printf("[completed-tasks-by-role] Failed to get tasks: %v\n", err)
+		respContent := fmt.Sprintf("❌ **Failed to retrieve completed tasks for role `%s`**\n\nAn error occurred while fetching tasks. Please try again or contact an administrator.", role)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: respContent,
+			},
+		})
+		return
+	}
+
+	if len(tasks) == 0 {
+		respContent := fmt.Sprintf("🔍 **No completed tasks found for role `%s`**\n\nThis role currently has no completed tasks.", role)
+		fmt.Printf("[completed-tasks-by-role] No completed tasks found for role %s\n", role)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: respContent,
+			},
+		})
+		return
+	}
+
+	respContent := fmt.Sprintf("✅ **Completed tasks for role `%s`:**\n", role)
+	for _, task := range tasks {
+		respContent += "--------------------------------\n"
+		respContent += fmt.Sprintf("*ID*: %d", task.ID)
+		respContent += fmt.Sprintf("\n*Title*: %s", task.Title)
+		if task.Description != "" {
+			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
+		}
+		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
+		if task.AssignedUserID.Valid {
+			respContent += fmt.Sprintf("\n*Assigned to*: <@%s>", task.AssignedUser.DiscordID)
+		}
+		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
+		respContent += "\n"
+	}
+
+	fmt.Printf("[completed-tasks-by-role] Retrieved %d completed tasks for role %s\n", len(tasks), role)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: respContent,
+		},
+	})
+}
+
+// getStatusIcon returns the appropriate emoji icon for a task status
+func getStatusIcon(status string) string {
+	switch status {
+	case db.TASK_NOT_STARTED:
+		return "⏳" // Hourglass
+	case db.TASK_IN_PROGRESS:
+		return "🔄" // Rotating arrows
+	case db.TASK_COMPLETED:
+		return "✅" // Check mark
+	default:
+		return "❓" // Question mark for unknown status
+	}
 }

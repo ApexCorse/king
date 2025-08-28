@@ -36,6 +36,8 @@ func (b *DiscordBot) Start() (func() error, error) {
 	b.session.AddHandler(b.getTasksByRoleCommand)
 	b.session.AddHandler(b.getUnassignedTasksCommandByRole)
 	b.session.AddHandler(b.assignTaskCommand)
+	b.session.AddHandler(b.updateTaskStatusCommand)
+	b.session.AddHandler(b.getCompletedTasksByRoleCommand)
 	fmt.Printf("[bot] Command handlers registered\n")
 
 	commands := []*discordgo.ApplicationCommand{
@@ -110,7 +112,7 @@ func (b *DiscordBot) Start() (func() error, error) {
 			},
 		},
 		{
-			Name: "assign-task",
+			Name:        "assign-task",
 			Description: "Assign a task to a user",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -123,6 +125,50 @@ func (b *DiscordBot) Start() (func() error, error) {
 					Type:        discordgo.ApplicationCommandOptionUser,
 					Name:        "user-id",
 					Description: "The ID of the user to assign the task to",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "update-task-status",
+			Description: "Update the status of a task",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "task-id",
+					Description: "The ID of the task to update",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "status",
+					Description: "The new status (Not Started, In Progress, Completed)",
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{
+							Name:  "Not Started",
+							Value: db.TASK_NOT_STARTED,
+						},
+						{
+							Name:  "In Progress",
+							Value: db.TASK_IN_PROGRESS,
+						},
+						{
+							Name:  "Completed",
+							Value: db.TASK_COMPLETED,
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:        "completed-tasks-by-role",
+			Description: "Get all completed tasks for a specific role",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionRole,
+					Name:        "role",
+					Description: "The role to get completed tasks for",
 					Required:    true,
 				},
 			},
