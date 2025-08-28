@@ -50,7 +50,7 @@ func main() {
 	log.Println("Database connection established successfully")
 
 	log.Println("Running database migrations...")
-	err = gormDB.AutoMigrate(&db.User{}, &db.Task{}, &db.TaskComment{})
+	err = gormDB.AutoMigrate(&db.User{}, &db.Task{}, &db.TaskAssignment{}, &db.TaskComment{})
 	if err != nil {
 		log.Fatalf("Failed to run database migrations: %v", err)
 	}

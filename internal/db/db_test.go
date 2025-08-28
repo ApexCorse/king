@@ -136,24 +136,22 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 			Description: "Test Description",
 		}
 
-		err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
+		err = db.CreateTaskWithUserDiscordID(task, "author123", []string{"assignee456"})
 		assert.NoError(t, err)
 		assert.NotZero(t, task.ID)
 		assert.Equal(t, author.ID, task.AuthorID)
-		assert.True(t, task.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee.ID), task.AssignedUserID.Int64)
 
 		// Verify task was saved to database
 		dbTask := &Task{}
-		err = gormDB.Preload("Author").Preload("AssignedUser").First(dbTask, task.ID).Error
+		err = gormDB.Preload("Author").Preload("Assignments.AssignedUser").First(dbTask, task.ID).Error
 		assert.NoError(t, err)
 		assert.Equal(t, task.Title, dbTask.Title)
 		assert.Equal(t, task.Description, dbTask.Description)
 		assert.Equal(t, author.ID, dbTask.AuthorID)
-		assert.True(t, dbTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee.ID), dbTask.AssignedUserID.Int64)
 		assert.Equal(t, author.Username, dbTask.Author.Username)
-		assert.Equal(t, assignee.Username, dbTask.AssignedUser.Username)
+		assert.Len(t, dbTask.Assignments, 1)
+		assert.Equal(t, assignee.ID, dbTask.Assignments[0].AssignedUserID)
+		assert.Equal(t, assignee.Username, dbTask.Assignments[0].AssignedUser.Username)
 	})
 
 	t.Run("author not found", func(t *testing.T) {
@@ -173,7 +171,7 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 			Description: "Test Description",
 		}
 
-		err = db.CreateTaskWithUserDiscordID(task, "nonexistent_author", "assignee456")
+		err = db.CreateTaskWithUserDiscordID(task, "nonexistent_author", []string{"assignee456"})
 		assert.Error(t, err)
 		assert.Zero(t, task.ID)
 	})
@@ -195,7 +193,7 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 			Description: "Test Description",
 		}
 
-		err = db.CreateTaskWithUserDiscordID(task, "author123", "nonexistent_assignee")
+		err = db.CreateTaskWithUserDiscordID(task, "author123", []string{"nonexistent_assignee"})
 		assert.Error(t, err)
 		assert.Zero(t, task.ID)
 	})
@@ -209,7 +207,7 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 			Description: "Test Description",
 		}
 
-		err := db.CreateTaskWithUserDiscordID(task, "nonexistent_author", "nonexistent_assignee")
+		err := db.CreateTaskWithUserDiscordID(task, "nonexistent_author", []string{"nonexistent_assignee"})
 		assert.Error(t, err)
 		assert.Zero(t, task.ID)
 	})
@@ -230,12 +228,10 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 			Description: "Task assigned to self",
 		}
 
-		err = db.CreateTaskWithUserDiscordID(task, "same123", "same123")
+		err = db.CreateTaskWithUserDiscordID(task, "same123", []string{"same123"})
 		assert.NoError(t, err)
 		assert.NotZero(t, task.ID)
 		assert.Equal(t, user.ID, task.AuthorID)
-		assert.True(t, task.AssignedUserID.Valid)
-		assert.Equal(t, int64(user.ID), task.AssignedUserID.Int64)
 	})
 
 	t.Run("empty discord IDs", func(t *testing.T) {
@@ -247,7 +243,7 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 			Description: "Test Description",
 		}
 
-		err := db.CreateTaskWithUserDiscordID(task, "", "")
+		err := db.CreateTaskWithUserDiscordID(task, "", []string{})
 		assert.Error(t, err)
 		assert.Zero(t, task.ID)
 	})
@@ -270,22 +266,20 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 			Description: "Task with no assigned user",
 		}
 
-		err = db.CreateTaskWithUserDiscordID(task, "author123", "")
+		err = db.CreateTaskWithUserDiscordID(task, "author123", []string{})
 		assert.NoError(t, err)
 		assert.NotZero(t, task.ID)
 		assert.Equal(t, author.ID, task.AuthorID)
-		assert.False(t, task.AssignedUserID.Valid) // Should be invalid when no assignee
 
 		// Verify task was saved to database
 		dbTask := &Task{}
-		err = gormDB.Preload("Author").Preload("AssignedUser").First(dbTask, task.ID).Error
+		err = gormDB.Preload("Author").Preload("Assignments.AssignedUser").First(dbTask, task.ID).Error
 		assert.NoError(t, err)
 		assert.Equal(t, task.Title, dbTask.Title)
 		assert.Equal(t, task.Description, dbTask.Description)
 		assert.Equal(t, author.ID, dbTask.AuthorID)
-		assert.False(t, dbTask.AssignedUserID.Valid)
 		assert.Equal(t, author.Username, dbTask.Author.Username)
-		assert.Zero(t, dbTask.AssignedUser.ID) // Should be zero when no assignee
+		assert.Len(t, dbTask.Assignments, 0) // Should have no assignments when no assignee
 	})
 }
 

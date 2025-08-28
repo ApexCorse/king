@@ -18,8 +18,8 @@ type User struct {
 	Username  string `gorm:"unique"`
 	DiscordID string `gorm:"unique"`
 
-	AssignedTasks []Task `gorm:"foreignKey:AssignedUserID"`
-	CreatedTasks  []Task `gorm:"foreignKey:AuthorID"`
+	TaskAssignments []TaskAssignment `gorm:"foreignKey:AssignedUserID"`
+	CreatedTasks    []Task           `gorm:"foreignKey:AuthorID"`
 }
 
 type Task struct {
@@ -33,10 +33,20 @@ type Task struct {
 	AuthorID uint
 	Author   User
 
-	AssignedUserID sql.NullInt64
-	AssignedUser   User
+	// Many-to-many relationship with users through TaskAssignment
+	Assignments []TaskAssignment
 
 	Comments []TaskComment
+}
+
+// TaskAssignment represents the many-to-many relationship between tasks and assigned users
+type TaskAssignment struct {
+	gorm.Model
+
+	TaskID         uint
+	Task           Task
+	AssignedUserID uint
+	AssignedUser   User
 }
 
 type TaskComment struct {

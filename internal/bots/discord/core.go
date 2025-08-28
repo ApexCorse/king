@@ -36,6 +36,8 @@ func (b *DiscordBot) Start() (func() error, error) {
 	b.session.AddHandler(b.getTasksByRoleCommand)
 	b.session.AddHandler(b.getUnassignedTasksCommandByRole)
 	b.session.AddHandler(b.assignTaskCommand)
+	b.session.AddHandler(b.unassignTaskCommand)
+	b.session.AddHandler(b.listTaskAssigneesCommand)
 	b.session.AddHandler(b.updateTaskStatusCommand)
 	b.session.AddHandler(b.getCompletedTasksByRoleCommand)
 	fmt.Printf("[bot] Command handlers registered\n")
@@ -43,7 +45,7 @@ func (b *DiscordBot) Start() (func() error, error) {
 	commands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "create-task",
-			Description: "Create a new task to assign to a member",
+			Description: "Create a new task to assign to members",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -60,7 +62,7 @@ func (b *DiscordBot) Start() (func() error, error) {
 				{
 					Type:        discordgo.ApplicationCommandOptionUser,
 					Name:        "assignee",
-					Description: "The user to assign the task to (optional)",
+					Description: "The user to assign the task to (optional, can be used multiple times)",
 					Required:    false,
 				},
 				{
@@ -125,6 +127,36 @@ func (b *DiscordBot) Start() (func() error, error) {
 					Type:        discordgo.ApplicationCommandOptionUser,
 					Name:        "user-id",
 					Description: "The ID of the user to assign the task to",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "unassign-task",
+			Description: "Unassign a task from a user",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "task-id",
+					Description: "The ID of the task to unassign",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user-id",
+					Description: "The ID of the user to unassign the task from",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "list-task-assignees",
+			Description: "List all users assigned to a task",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "task-id",
+					Description: "The ID of the task to list assignees for",
 					Required:    true,
 				},
 			},

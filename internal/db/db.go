@@ -31,13 +31,13 @@ func (d *DB) GetUserByDiscordID(discordID string) (*User, error) {
 	return user, nil
 }
 
-func (d *DB) CreateTaskWithUserDiscordID(task *Task, authorID string, assigneeID string) error {
+func (d *DB) CreateTaskWithUserDiscordID(task *Task, authorID string, assigneeIDs []string) error {
 	// Create channels to receive results from goroutines
 	authorChan := make(chan *User, 1)
-	assigneeChan := make(chan *User, 1)
-	errorChan := make(chan error, 2)
+	assigneeChans := make([]chan *User, len(assigneeIDs))
+	errorChan := make(chan error, 1+len(assigneeIDs))
 
-	// Run author query in parallel
+	// Run author query
 	go func() {
 		author, err := d.GetUserByDiscordID(authorID)
 		if err != nil {
@@ -47,42 +47,56 @@ func (d *DB) CreateTaskWithUserDiscordID(task *Task, authorID string, assigneeID
 		authorChan <- author
 	}()
 
-	// Run assignee query in parallel
-	if assigneeID != "" {
-		go func() {
-			assignee, err := d.GetUserByDiscordID(assigneeID)
+	// Run assignee queries in parallel
+	for i, assigneeID := range assigneeIDs {
+		assigneeChans[i] = make(chan *User, 1)
+		go func(idx int, id string) {
+			assignee, err := d.GetUserByDiscordID(id)
 			if err != nil {
 				errorChan <- err
 				return
 			}
-			assigneeChan <- assignee
-		}()
+			assigneeChans[idx] <- assignee
+		}(i, assigneeID)
 	}
 
-	// Wait for both results
-	var author, assignee *User
-	numChannels := 1
-	if assigneeID != "" {
-		numChannels++
+	// Wait for author result
+	var author *User
+	select {
+	case err := <-errorChan:
+		return err
+	case author = <-authorChan:
 	}
-	for range numChannels {
+
+	// Wait for all assignee results
+	assignees := make([]*User, len(assigneeIDs))
+	for i, ch := range assigneeChans {
 		select {
 		case err := <-errorChan:
 			return err
-		case author = <-authorChan:
-		case assignee = <-assigneeChan:
+		case assignees[i] = <-ch:
 		}
 	}
 
 	task.AuthorID = author.ID
-	if assigneeID != "" {
-		task.AssignedUserID = sql.NullInt64{
-			Int64: int64(assignee.ID),
-			Valid: true,
+
+	// Create the task first
+	if err := d.db.Create(task).Error; err != nil {
+		return err
+	}
+
+	// Create task assignments for each assignee
+	for _, assignee := range assignees {
+		assignment := &TaskAssignment{
+			TaskID:         task.ID,
+			AssignedUserID: assignee.ID,
+		}
+		if err := d.db.Create(assignment).Error; err != nil {
+			return err
 		}
 	}
 
-	return d.db.Create(task).Error
+	return nil
 }
 
 func (d *DB) GetAssignedTasksByUserDiscordID(userID string) ([]Task, error) {
@@ -93,8 +107,9 @@ func (d *DB) GetAssignedTasksByUserDiscordID(userID string) ([]Task, error) {
 		return nil, err
 	}
 
-	if err := d.db.Preload("Author").Preload("AssignedUser").
-		Where("assigned_user_id = ? AND status != ?", int64(user.ID), TASK_COMPLETED).
+	if err := d.db.Preload("Author").Preload("Assignments.AssignedUser").
+		Joins("JOIN task_assignments ON tasks.id = task_assignments.task_id").
+		Where("task_assignments.assigned_user_id = ? AND tasks.status != ?", user.ID, TASK_COMPLETED).
 		Find(&tasks).Error; err != nil {
 		return nil, err
 	}
@@ -105,7 +120,7 @@ func (d *DB) GetAssignedTasksByUserDiscordID(userID string) ([]Task, error) {
 func (d *DB) GetTaskByID(id int64) (*Task, error) {
 	task := &Task{}
 
-	if err := d.db.Preload("Author").Preload("AssignedUser").First(task, id).Error; err != nil {
+	if err := d.db.Preload("Author").Preload("Assignments.AssignedUser").First(task, id).Error; err != nil {
 		return nil, err
 	}
 
@@ -117,7 +132,7 @@ func (d *DB) GetCompletedTasksByRole(role string) ([]Task, error) {
 	if role == "" {
 		return nil, fmt.Errorf("role cannot be empty")
 	}
-	if err := d.db.Preload("Author").Preload("AssignedUser").
+	if err := d.db.Preload("Author").Preload("Assignments.AssignedUser").
 		Where("role = ? AND status = ?", role, TASK_COMPLETED).
 		Find(&tasks).Error; err != nil {
 		return nil, err
@@ -130,7 +145,7 @@ func (d *DB) GetTasksByRole(role string) ([]Task, error) {
 	if role == "" {
 		return nil, fmt.Errorf("role cannot be empty")
 	}
-	if err := d.db.Preload("Author").Preload("AssignedUser").
+	if err := d.db.Preload("Author").Preload("Assignments.AssignedUser").
 		Where("role = ? AND status != ?", role, TASK_COMPLETED).
 		Find(&tasks).Error; err != nil {
 		return nil, err
@@ -143,8 +158,8 @@ func (d *DB) GetUnassignedTasksByRole(role string) ([]Task, error) {
 	if role == "" {
 		return nil, fmt.Errorf("role cannot be empty")
 	}
-	if err := d.db.Preload("Author").Preload("AssignedUser").
-		Where("role = ? AND assigned_user_id IS NULL AND status != ?", role, TASK_COMPLETED).
+	if err := d.db.Preload("Author").Preload("Assignments.AssignedUser").
+		Where("role = ? AND status != ? AND id NOT IN (SELECT DISTINCT task_id FROM task_assignments)", role, TASK_COMPLETED).
 		Find(&tasks).Error; err != nil {
 		return nil, err
 	}
@@ -152,8 +167,28 @@ func (d *DB) GetUnassignedTasksByRole(role string) ([]Task, error) {
 }
 
 func (d *DB) AssignTask(taskID int64, userID int64) error {
-	if err := d.db.Model(&Task{}).Where("id = ?", taskID).Update("assigned_user_id", userID).Error; err != nil {
+	// Check if assignment already exists
+	var existingAssignment TaskAssignment
+	err := d.db.Where("task_id = ? AND assigned_user_id = ?", taskID, userID).First(&existingAssignment).Error
+	if err == nil {
+		return fmt.Errorf("task is already assigned to this user")
+	}
+
+	assignment := &TaskAssignment{
+		TaskID:         uint(taskID),
+		AssignedUserID: uint(userID),
+	}
+
+	if err := d.db.Create(assignment).Error; err != nil {
 		return fmt.Errorf("failed to assign task: %w", err)
+	}
+
+	return nil
+}
+
+func (d *DB) UnassignTask(taskID int64, userID int64) error {
+	if err := d.db.Where("task_id = ? AND assigned_user_id = ?", taskID, userID).Delete(&TaskAssignment{}).Error; err != nil {
+		return fmt.Errorf("failed to unassign task: %w", err)
 	}
 
 	return nil

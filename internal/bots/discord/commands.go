@@ -41,7 +41,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	fmt.Printf("[create-task] Command executed by user %s\n", i.Member.User.Username)
 
 	task := &db.Task{}
-	assigneeId := ""
+	assigneeIds := []string{}
 	respContent := ""
 
 	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
@@ -81,8 +81,8 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 
 	if assignee != nil {
 		fmt.Printf(", assignee: %s", assignee.UserValue(s).ID)
-		assigneeId = assignee.UserValue(s).ID
-		respContent += fmt.Sprintf("\n*Assignee*: <@%s>", assigneeId)
+		assigneeIds = append(assigneeIds, assignee.UserValue(s).ID)
+		respContent += fmt.Sprintf("\n*Assignee*: <@%s>", assignee.UserValue(s).ID)
 	}
 
 	if role != nil {
@@ -93,7 +93,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	fmt.Printf("\n")
 
 	wg := sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(1 + len(assigneeIds))
 	go func() {
 		b.db.CreateUser(&db.User{
 			Username:  author.Username,
@@ -102,16 +102,21 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		wg.Done()
 	}()
 
-	if assignee != nil {
-		go func() {
+	for _, assigneeId := range assigneeIds {
+		go func(id string) {
+			// Get user info from Discord
+			user, err := s.User(id)
+			if err != nil {
+				fmt.Printf("[create-task] Failed to get user info for %s: %v\n", id, err)
+				wg.Done()
+				return
+			}
 			b.db.CreateUser(&db.User{
-				Username:  assignee.UserValue(s).Username,
-				DiscordID: assignee.UserValue(s).ID,
+				Username:  user.Username,
+				DiscordID: user.ID,
 			})
 			wg.Done()
-		}()
-	} else {
-		wg.Done()
+		}(assigneeId)
 	}
 
 	wg.Wait()
@@ -119,7 +124,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	err := b.db.CreateTaskWithUserDiscordID(
 		task,
 		author.ID,
-		assigneeId,
+		assigneeIds,
 	)
 
 	if err != nil {
@@ -263,8 +268,16 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 	if task.Role != "" {
 		respContent += fmt.Sprintf("\n*Role*: %s", task.Role)
 	}
-	if task.AssignedUserID.Valid {
-		respContent += fmt.Sprintf("\n*Assigned to*: <@%s>", task.AssignedUser.DiscordID)
+	if len(task.Assignments) > 0 {
+		respContent += "\n*Assigned to*: "
+		for i, assignment := range task.Assignments {
+			if i > 0 {
+				respContent += ", "
+			}
+			respContent += fmt.Sprintf("<@%s>", assignment.AssignedUser.DiscordID)
+		}
+	} else {
+		respContent += "\n*Assigned to*: No one assigned"
 	}
 	respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
 	respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
@@ -345,8 +358,16 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
 		}
 		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
-		if task.AssignedUserID.Valid {
-			respContent += fmt.Sprintf("\n*Assigned to*: <@%s>", task.AssignedUser.DiscordID)
+		if len(task.Assignments) > 0 {
+			respContent += "\n*Assigned to*: "
+			for i, assignment := range task.Assignments {
+				if i > 0 {
+					respContent += ", "
+				}
+				respContent += fmt.Sprintf("<@%s>", assignment.AssignedUser.DiscordID)
+			}
+		} else {
+			respContent += "\n*Assigned to*: No one assigned"
 		}
 		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
 		respContent += "\n"
@@ -654,8 +675,16 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
 		}
 		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
-		if task.AssignedUserID.Valid {
-			respContent += fmt.Sprintf("\n*Assigned to*: <@%s>", task.AssignedUser.DiscordID)
+		if len(task.Assignments) > 0 {
+			respContent += "\n*Assigned to*: "
+			for i, assignment := range task.Assignments {
+				if i > 0 {
+					respContent += ", "
+				}
+				respContent += fmt.Sprintf("<@%s>", assignment.AssignedUser.DiscordID)
+			}
+		} else {
+			respContent += "\n*Assigned to*: No one assigned"
 		}
 		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
 		respContent += "\n"
@@ -682,4 +711,155 @@ func getStatusIcon(status string) string {
 	default:
 		return "❓" // Question mark for unknown status
 	}
+}
+
+func (b *DiscordBot) unassignTaskCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	if i.ApplicationCommandData().Name != "unassign-task" {
+		return
+	}
+
+	options := i.ApplicationCommandData().Options
+	if len(options) != 2 {
+		fmt.Printf("[unassign-task] Invalid number of options provided: %d\n", len(options))
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ **Invalid options**\n\nYou must provide exactly two options (task ID and user ID).",
+			},
+		})
+		return
+	}
+
+	var taskID int64
+	var userID int64
+
+	for _, opt := range options {
+		switch opt.Name {
+		case "task-id":
+			if opt.Type != discordgo.ApplicationCommandOptionInteger {
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "⚠️ **Invalid task ID**\n\nTask ID must be a valid integer.",
+					},
+				})
+				return
+			}
+			taskID = opt.IntValue()
+		case "user-id":
+			if opt.Type != discordgo.ApplicationCommandOptionUser {
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "⚠️ **Invalid user ID**\n\nUser ID must be a valid user.",
+					},
+				})
+				return
+			}
+			userID = opt.UserValue(s).ID
+		}
+	}
+
+	// Get user by Discord ID to get the database user ID
+	user, err := b.db.GetUserByDiscordID(userID)
+	if err != nil {
+		fmt.Printf("[unassign-task] Failed to get user: %v\n", err)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ **User not found**\n\nThe specified user was not found in the database.",
+			},
+		})
+		return
+	}
+
+	err = b.db.UnassignTask(taskID, int64(user.ID))
+	if err != nil {
+		fmt.Printf("[unassign-task] Failed to unassign task: %v\n", err)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ **Failed to unassign task**\n\nAn error occurred while unassigning the task. Please try again or contact an administrator.",
+			},
+		})
+		return
+	}
+
+	respContent := fmt.Sprintf("✅ **Task unassigned successfully!**\n\nTask `%d` has been unassigned from <@%s>.", taskID, userID)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: respContent,
+		},
+	})
+}
+
+func (b *DiscordBot) listTaskAssigneesCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	if i.ApplicationCommandData().Name != "list-task-assignees" {
+		return
+	}
+
+	options := i.ApplicationCommandData().Options
+	if len(options) != 1 {
+		fmt.Printf("[list-task-assignees] Invalid number of options provided: %d\n", len(options))
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ **Invalid options**\n\nYou must provide exactly one option (task ID).",
+			},
+		})
+		return
+	}
+
+	if options[0].Name != "task-id" && options[0].Type != discordgo.ApplicationCommandOptionInteger {
+		fmt.Printf("[list-task-assignees] Invalid option provided: %s\n", options[0].Name)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ **Invalid task ID**\n\nYou must provide a valid integer ID for the task.",
+			},
+		})
+		return
+	}
+
+	taskID := options[0].IntValue()
+	task, err := b.db.GetTaskByID(taskID)
+	if err != nil {
+		fmt.Printf("[list-task-assignees] Failed to get task: %v\n", err)
+		respContent := fmt.Sprintf("❌ **Task not found!**\n\nTask with ID `%d` doesn't exist or has been deleted. Please check the ID and try again.", taskID)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: respContent,
+			},
+		})
+		return
+	}
+
+	respContent := fmt.Sprintf("👥 **Assignees for Task #%d**\n\n*Title*: %s\n", task.ID, task.Title)
+	
+	if len(task.Assignments) > 0 {
+		respContent += "\n**Assigned Users:**\n"
+		for i, assignment := range task.Assignments {
+			respContent += fmt.Sprintf("%d. <@%s> (%s)\n", i+1, assignment.AssignedUser.DiscordID, assignment.AssignedUser.Username)
+		}
+	} else {
+		respContent += "\n**No users are currently assigned to this task.**"
+	}
+
+	fmt.Printf("[list-task-assignees] Retrieved assignees for task %d\n", task.ID)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: respContent,
+		},
+	})
 }
