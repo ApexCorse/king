@@ -24,6 +24,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Missing title**\n\nYou must provide at least a title for the task.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -34,6 +35,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "🚫 **Access denied**\n\nYou must be a member of a server to use this command.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -56,6 +58,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Missing title**\n\nYou must provide a title for the task.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -128,6 +131,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "❌ **Failed to create task**\n\nAn error occurred while creating the task. Please try again or contact an administrator.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -140,6 +144,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -159,6 +164,7 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "You must be a member of a server to use this command",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -173,6 +179,7 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "❌ **Failed to retrieve tasks**\n\nAn error occurred while fetching your assigned tasks. Please try again or contact an administrator.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -185,6 +192,7 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: respContent,
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -206,6 +214,7 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -226,6 +235,7 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid options**\n\nYou must provide exactly one option (task ID).",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -251,6 +261,7 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: respContent,
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -274,6 +285,7 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -294,6 +306,7 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid options**\n\nYou must provide exactly one option (role).",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -305,6 +318,7 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid role**\n\nYou must provide a valid role.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -319,6 +333,7 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: respContent,
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -331,6 +346,7 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: respContent,
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -357,6 +373,7 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -377,6 +394,7 @@ func (b *DiscordBot) getUnassignedTasksCommandByRole(s *discordgo.Session, i *di
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid options**\n\nYou must provide exactly one option (role).",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -388,6 +406,7 @@ func (b *DiscordBot) getUnassignedTasksCommandByRole(s *discordgo.Session, i *di
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid role**\n\nYou must provide a valid role.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -402,6 +421,7 @@ func (b *DiscordBot) getUnassignedTasksCommandByRole(s *discordgo.Session, i *di
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: respContent,
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -414,6 +434,7 @@ func (b *DiscordBot) getUnassignedTasksCommandByRole(s *discordgo.Session, i *di
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: respContent,
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -437,6 +458,7 @@ func (b *DiscordBot) getUnassignedTasksCommandByRole(s *discordgo.Session, i *di
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -457,6 +479,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid options**\n\nYou must provide exactly two options (task ID and user ID).",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -468,6 +491,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid task ID**\n\nYou must provide a valid integer ID for the task.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 	}
@@ -478,6 +502,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid user ID**\n\nYou must provide a valid user ID.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -493,6 +518,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "❌ **Failed to assign task**\n\nAn error occurred while assigning the task. Please try again or contact an administrator.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -505,6 +531,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "❌ **Failed to assign task**\n\nAn error occurred while assigning the task. Please try again or contact an administrator.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -515,6 +542,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -535,6 +563,7 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid options**\n\nYou must provide exactly two options (task ID and status).",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -546,6 +575,7 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid task ID**\n\nYou must provide a valid integer ID for the task.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -557,6 +587,7 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid status**\n\nYou must provide a valid status string.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -572,6 +603,7 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: fmt.Sprintf("❌ **Failed to update task status**\n\n%s", err.Error()),
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -583,6 +615,7 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -603,6 +636,7 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid options**\n\nYou must provide exactly one option (role).",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -614,6 +648,7 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "⚠️ **Invalid role**\n\nYou must provide a valid role.",
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -628,6 +663,7 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: respContent,
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -640,6 +676,7 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: respContent,
+				Flags: discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -666,6 +703,7 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
