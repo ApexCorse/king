@@ -1,6 +1,11 @@
 package db
 
-import "gorm.io/gorm"
+import (
+	"database/sql"
+	"fmt"
+
+	"gorm.io/gorm"
+)
 
 type DB struct {
 	db *gorm.DB
@@ -41,18 +46,24 @@ func (d *DB) CreateTaskWithUserDiscordID(task *Task, authorID string, assigneeID
 	}()
 
 	// Run assignee query in parallel
-	go func() {
-		assignee, err := d.GetUserByDiscordID(assigneeID)
-		if err != nil {
-			errorChan <- err
-			return
-		}
-		assigneeChan <- assignee
-	}()
+	if assigneeID != "" {
+		go func() {
+			assignee, err := d.GetUserByDiscordID(assigneeID)
+			if err != nil {
+				errorChan <- err
+				return
+			}
+			assigneeChan <- assignee
+		}()
+	}
 
 	// Wait for both results
 	var author, assignee *User
-	for range 2 {
+	numChannels := 1
+	if assigneeID != "" {
+		numChannels++
+	}
+	for range numChannels {
 		select {
 		case err := <-errorChan:
 			return err
@@ -62,7 +73,12 @@ func (d *DB) CreateTaskWithUserDiscordID(task *Task, authorID string, assigneeID
 	}
 
 	task.AuthorID = author.ID
-	task.AssignedUserID = assignee.ID
+	if assigneeID != "" {
+		task.AssignedUserID = sql.NullInt64{
+			Int64: int64(assignee.ID),
+			Valid: true,
+		}
+	}
 
 	return d.db.Create(task).Error
 }
@@ -75,9 +91,51 @@ func (d *DB) GetAssignedTasksByUserDiscordID(userID string) ([]Task, error) {
 		return nil, err
 	}
 
-	if err := d.db.Preload("Author").Preload("AssignedUser").Where("assigned_user_id = ?", user.ID).Find(&tasks).Error; err != nil {
+	if err := d.db.Preload("Author").Preload("AssignedUser").Where("assigned_user_id = ?", int64(user.ID)).Find(&tasks).Error; err != nil {
 		return nil, err
 	}
 
 	return tasks, nil
+}
+
+func (d *DB) GetTaskByID(id int64) (*Task, error) {
+	task := &Task{}
+
+	if err := d.db.Preload("Author").Preload("AssignedUser").First(task, id).Error; err != nil {
+		return nil, err
+	}
+
+	return task, nil
+}
+
+func (d *DB) GetTasksByRole(role string) ([]Task, error) {
+	tasks := make([]Task, 0)
+	if role == "" {
+		return nil, fmt.Errorf("role cannot be empty")
+	}
+	if err := d.db.Preload("Author").Preload("AssignedUser").Where("role = ?", role).Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (d *DB) GetUnassignedTasksByRole(role string) ([]Task, error) {
+	tasks := make([]Task, 0)
+	if role == "" {
+		return nil, fmt.Errorf("role cannot be empty")
+	}
+	if err := d.db.Preload("Author").Preload("AssignedUser").
+		Where("role = ? AND assigned_user_id IS NULL", role).
+		Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (d *DB) AssignTask(taskID int64, userID int64) error {
+	if err := d.db.Model(&Task{}).Where("id = ?", taskID).Update("assigned_user_id", userID).Error; err != nil {
+		return fmt.Errorf("failed to assign task: %w", err)
+	}
+
+	return nil
 }

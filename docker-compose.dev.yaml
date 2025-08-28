@@ -1,0 +1,13 @@
+services:
+  server:
+    image: cosmtrek/air
+    working_dir: /app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      ADDRESS: ":8080"
+    entrypoint: ["/go/bin/air", "--build.cmd", "go build -o bin/main cmd/main.go", "--build.bin", "./bin/main"]
+    volumes:
+      - ./:/app
