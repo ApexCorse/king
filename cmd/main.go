@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -12,12 +13,14 @@ import (
 	"github.com/Formula-SAE/discord/internal/bots/discord"
 	"github.com/Formula-SAE/discord/internal/db"
 	"github.com/bwmarrin/discordgo"
+	"github.com/google/go-github/v74/github"
 	"github.com/gorilla/mux"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
 func main() {
 	log.Println("=== Starting King Discord Bot ===")
+	ctx := context.Background()
 
 	// env vars
 	discordToken := os.Getenv("DISCORD_TOKEN")
@@ -25,11 +28,12 @@ func main() {
 	dbUrl := os.Getenv("DB_URL")
 	appID := os.Getenv("APPLICATION_ID")
 	guildID := os.Getenv("GUILD_ID")
+	githubToken := os.Getenv("GITHUB_TOKEN")
 
 	log.Println("Checking environment variables...")
-	if discordToken == "" || dbUrl == "" || appID == "" || guildID == "" {
-		log.Fatalf("Missing required environment variables: DISCORD_TOKEN=%t, DB_URL=%t, APP_ID=%t, GUILD_ID=%t",
-			discordToken != "", dbUrl != "", appID != "", guildID != "")
+	if discordToken == "" || dbUrl == "" || appID == "" || guildID == "" || githubToken == "" {
+		log.Fatalf("Missing required environment variables: DISCORD_TOKEN=%t, DB_URL=%t, APP_ID=%t, GUILD_ID=%t, GITHUB_TOKEN=%t",
+			discordToken != "", dbUrl != "", appID != "", guildID != "", githubToken != "")
 	}
 	log.Println("Environment variables validated successfully")
 
@@ -68,12 +72,13 @@ func main() {
 	log.Println("Discord session created successfully")
 
 	router := mux.NewRouter()
+	gc := github.NewClient(nil).WithAuthToken(githubToken)
 
 	log.Println("Creating Discord bot instance...")
-	discordBot := discord.NewDiscordBot(session, DB, appID, guildID, router)
+	discordBot := discord.NewDiscordBot(session, DB, appID, guildID, router, gc)
 
 	log.Println("Starting Discord bot...")
-	close, err := discordBot.Start()
+	close, err := discordBot.Start(ctx)
 	if err != nil {
 		panic(err)
 	}

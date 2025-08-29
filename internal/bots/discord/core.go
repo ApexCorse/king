@@ -1,11 +1,15 @@
 package discord
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/Formula-SAE/discord/internal/db"
 	"github.com/bwmarrin/discordgo"
+	"github.com/google/go-github/v74/github"
 	"github.com/gorilla/mux"
 )
 
@@ -16,27 +20,49 @@ type DiscordBot struct {
 	guildID string
 
 	router *mux.Router
+	gc     *github.Client
 }
 
-func NewDiscordBot(s *discordgo.Session, db *db.DB, appID string, guildID string, router *mux.Router) *DiscordBot {
+func NewDiscordBot(s *discordgo.Session, db *db.DB, appID string, guildID string, router *mux.Router, gc *github.Client) *DiscordBot {
 	return &DiscordBot{
 		session: s,
 		db:      db,
 		appID:   appID,
 		guildID: guildID,
 		router:  router,
+		gc:      gc,
 	}
 }
 
-func (b *DiscordBot) Start() (func() error, error) {
-	b.router.HandleFunc("/push", b.onPushWebhook).Methods("POST")
+func (b *DiscordBot) Start(ctx context.Context) (func() error, error) {
+	b.initWebhookHandlers()
 
 	err := b.session.Open()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open Discord session: %v", err)
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	githubRepoNames, err := b.updateRepositoriesInDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	fmt.Printf("[bot] Discord session opened successfully\n")
+	b.initCommandHandlers()
+	fmt.Printf("[bot] Command handlers registered\n")
+
+	if err := b.initCommands(githubRepoNames); err != nil {
+		return nil, err
+	}
+
+	go http.ListenAndServe(":8080", b.router)
+
+	return b.session.Close, nil
+}
+
+func (b *DiscordBot) initCommandHandlers() {
 	b.session.AddHandler(b.createTaskCommand)
 	b.session.AddHandler(b.getAssignedTasksCommand)
 	b.session.AddHandler(b.getTaskCommand)
@@ -47,7 +73,16 @@ func (b *DiscordBot) Start() (func() error, error) {
 	b.session.AddHandler(b.getCompletedTasksByRoleCommand)
 	b.session.AddHandler(b.subscribeChannelToPushWebhookCommand)
 	b.session.AddHandler(b.unsubscribeChannelFromPushWebhookCommand)
-	fmt.Printf("[bot] Command handlers registered\n")
+}
+
+func (b *DiscordBot) initCommands(githubRepoNames []string) error {
+	repoOptions := make([]*discordgo.ApplicationCommandOptionChoice, len(githubRepoNames))
+	for i, repoName := range githubRepoNames {
+		repoOptions[i] = &discordgo.ApplicationCommandOptionChoice{
+			Name:  repoName,
+			Value: repoName,
+		}
+	}
 
 	commands := []*discordgo.ApplicationCommand{
 		{
@@ -191,6 +226,7 @@ func (b *DiscordBot) Start() (func() error, error) {
 					Name:        "repository",
 					Description: "The repository to subscribe to",
 					Required:    true,
+					Choices:     repoOptions,
 				},
 			},
 		},
@@ -203,20 +239,37 @@ func (b *DiscordBot) Start() (func() error, error) {
 					Name:        "repository",
 					Description: "The repository to unsubscribe from",
 					Required:    true,
+					Choices:     repoOptions,
 				},
 			},
 		},
 	}
 
+	errChan := make(chan error, len(commands))
+	wg := sync.WaitGroup{}
 	for _, command := range commands {
-		_, err = b.session.ApplicationCommandCreate(b.appID, "", command)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create application command: %v", err)
-		}
-		fmt.Printf("[bot] Created command: %s\n", command.Name)
+		wg.Add(1)
+		go func(command *discordgo.ApplicationCommand) {
+			defer wg.Done()
+			_, err := b.session.ApplicationCommandCreate(b.appID, "", command)
+			if err != nil {
+				fmt.Printf("[bot] Failed to create application command: %v\n", err)
+				errChan <- err
+			}
+			fmt.Printf("[bot] Created command: %s\n", command.Name)
+		}(command)
 	}
 
-	go http.ListenAndServe(":8080", b.router)
+	wg.Wait()
+	close(errChan)
 
-	return b.session.Close, nil
+	for err := range errChan {
+		return err
+	}
+
+	return nil
+}
+
+func (b *DiscordBot) initWebhookHandlers() {
+	b.router.HandleFunc("/push", b.onPushWebhook).Methods("POST")
 }

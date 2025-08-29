@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -2325,5 +2326,290 @@ func TestDeleteWebhookSubscription(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, subscriptions, 1)
 		assert.Equal(t, newSubscription.ID, subscriptions[0].ID)
+	})
+}
+
+func TestCreateRepository(t *testing.T) {
+	t.Run("successful repository creation", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		repo := &Repository{
+			Name: "test-repository",
+		}
+
+		err := db.CreateRepository(repo)
+		assert.NoError(t, err)
+		assert.NotZero(t, repo.ID)
+
+		// Verify repository was saved to database
+		dbRepo := &Repository{}
+		err = gormDB.First(dbRepo, repo.ID).Error
+		assert.NoError(t, err)
+		assert.Equal(t, repo.Name, dbRepo.Name)
+	})
+
+	t.Run("duplicate repository name should fail", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		repo1 := &Repository{
+			Name: "test-repository",
+		}
+		err := db.CreateRepository(repo1)
+		assert.NoError(t, err)
+
+		repo2 := &Repository{
+			Name: "test-repository", // Same name
+		}
+		err = db.CreateRepository(repo2)
+		assert.Error(t, err)
+	})
+
+	t.Run("create repository with special characters", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		repo := &Repository{
+			Name: "test-repo/with-special-chars_123",
+		}
+
+		err := db.CreateRepository(repo)
+		assert.NoError(t, err)
+		assert.NotZero(t, repo.ID)
+
+		// Verify repository was saved correctly
+		dbRepo := &Repository{}
+		err = gormDB.First(dbRepo, repo.ID).Error
+		assert.NoError(t, err)
+		assert.Equal(t, "test-repo/with-special-chars_123", dbRepo.Name)
+	})
+
+	t.Run("create repository with very long name", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		longName := "very-long-repository-name-that-might-exceed-normal-lengths-and-test-the-database-limits"
+		repo := &Repository{
+			Name: longName,
+		}
+
+		err := db.CreateRepository(repo)
+		assert.NoError(t, err)
+		assert.NotZero(t, repo.ID)
+
+		// Verify repository was saved correctly
+		dbRepo := &Repository{}
+		err = gormDB.First(dbRepo, repo.ID).Error
+		assert.NoError(t, err)
+		assert.Equal(t, longName, dbRepo.Name)
+	})
+
+	t.Run("create repository with empty name", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		repo := &Repository{
+			Name: "",
+		}
+
+		err := db.CreateRepository(repo)
+		assert.NoError(t, err) // The method doesn't validate empty names
+		assert.NotZero(t, repo.ID)
+
+		// Verify repository was saved
+		dbRepo := &Repository{}
+		err = gormDB.First(dbRepo, repo.ID).Error
+		assert.NoError(t, err)
+		assert.Equal(t, "", dbRepo.Name)
+	})
+
+	t.Run("create multiple repositories", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		repos := []*Repository{
+			{Name: "repo1"},
+			{Name: "repo2"},
+			{Name: "repo3"},
+		}
+
+		for _, repo := range repos {
+			err := db.CreateRepository(repo)
+			assert.NoError(t, err)
+			assert.NotZero(t, repo.ID)
+		}
+
+		// Verify all repositories were saved
+		var count int64
+		gormDB.Model(&Repository{}).Count(&count)
+		assert.Equal(t, int64(3), count)
+	})
+}
+
+func TestGetAllRepositories(t *testing.T) {
+	t.Run("successful retrieval of all repositories", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create repositories
+		repos := []*Repository{
+			{Name: "repo-c"},
+			{Name: "repo-a"},
+			{Name: "repo-b"},
+		}
+
+		for _, repo := range repos {
+			err := db.CreateRepository(repo)
+			require.NoError(t, err)
+		}
+
+		// Retrieve all repositories
+		retrievedRepos, err := db.GetAllRepositories()
+		assert.NoError(t, err)
+		assert.Len(t, retrievedRepos, 3)
+
+		// Verify repositories are ordered by name
+		assert.Equal(t, "repo-a", retrievedRepos[0].Name)
+		assert.Equal(t, "repo-b", retrievedRepos[1].Name)
+		assert.Equal(t, "repo-c", retrievedRepos[2].Name)
+	})
+
+	t.Run("no repositories in database", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Retrieve all repositories when none exist
+		repos, err := db.GetAllRepositories()
+		assert.NoError(t, err)
+		assert.Empty(t, repos)
+	})
+
+	t.Run("single repository", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create single repository
+		repo := &Repository{Name: "single-repo"}
+		err := db.CreateRepository(repo)
+		require.NoError(t, err)
+
+		// Retrieve all repositories
+		retrievedRepos, err := db.GetAllRepositories()
+		assert.NoError(t, err)
+		assert.Len(t, retrievedRepos, 1)
+		assert.Equal(t, "single-repo", retrievedRepos[0].Name)
+		assert.Equal(t, repo.ID, retrievedRepos[0].ID)
+	})
+
+	t.Run("repositories with special characters", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create repositories with special characters
+		repos := []*Repository{
+			{Name: "repo-with-dashes"},
+			{Name: "repo_with_underscores"},
+			{Name: "repo/with/slashes"},
+			{Name: "repo.with.dots"},
+		}
+
+		for _, repo := range repos {
+			err := db.CreateRepository(repo)
+			require.NoError(t, err)
+		}
+
+		// Retrieve all repositories
+		retrievedRepos, err := db.GetAllRepositories()
+		assert.NoError(t, err)
+		assert.Len(t, retrievedRepos, 4)
+
+		// Verify all repositories are returned
+		repoNames := make(map[string]bool)
+		for _, repo := range retrievedRepos {
+			repoNames[repo.Name] = true
+		}
+		assert.True(t, repoNames["repo-with-dashes"])
+		assert.True(t, repoNames["repo_with_underscores"])
+		assert.True(t, repoNames["repo/with/slashes"])
+		assert.True(t, repoNames["repo.with.dots"])
+	})
+
+	t.Run("repositories with numbers", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create repositories with numbers
+		repos := []*Repository{
+			{Name: "repo1"},
+			{Name: "repo10"},
+			{Name: "repo2"},
+		}
+
+		for _, repo := range repos {
+			err := db.CreateRepository(repo)
+			require.NoError(t, err)
+		}
+
+		// Retrieve all repositories
+		retrievedRepos, err := db.GetAllRepositories()
+		assert.NoError(t, err)
+		assert.Len(t, retrievedRepos, 3)
+
+		// Verify repositories are ordered by name (lexicographic order)
+		assert.Equal(t, "repo1", retrievedRepos[0].Name)
+		assert.Equal(t, "repo10", retrievedRepos[1].Name)
+		assert.Equal(t, "repo2", retrievedRepos[2].Name)
+	})
+
+	t.Run("repositories with mixed case", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create repositories with mixed case
+		repos := []*Repository{
+			{Name: "Repo-C"},
+			{Name: "repo-a"},
+			{Name: "REPO-B"},
+		}
+
+		for _, repo := range repos {
+			err := db.CreateRepository(repo)
+			require.NoError(t, err)
+		}
+
+		// Retrieve all repositories
+		retrievedRepos, err := db.GetAllRepositories()
+		assert.NoError(t, err)
+		assert.Len(t, retrievedRepos, 3)
+
+		// Verify repositories are ordered by name (case sensitive)
+		assert.Equal(t, "REPO-B", retrievedRepos[0].Name)
+		assert.Equal(t, "Repo-C", retrievedRepos[1].Name)
+		assert.Equal(t, "repo-a", retrievedRepos[2].Name)
+	})
+
+	t.Run("large number of repositories", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create many repositories
+		numRepos := 50
+		for i := range numRepos {
+			repo := &Repository{Name: fmt.Sprintf("repo-%03d", i)}
+			err := db.CreateRepository(repo)
+			require.NoError(t, err)
+		}
+
+		// Retrieve all repositories
+		retrievedRepos, err := db.GetAllRepositories()
+		assert.NoError(t, err)
+		assert.Len(t, retrievedRepos, numRepos)
+
+		// Verify repositories are ordered
+		for i := range numRepos {
+			expectedName := fmt.Sprintf("repo-%03d", i)
+			assert.Equal(t, expectedName, retrievedRepos[i].Name)
+		}
 	})
 }
