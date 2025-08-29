@@ -37,10 +37,10 @@ func (d *DB) GetUserByDiscordID(discordID string, options *UserRetrieveOptions) 
 	query := d.db
 	if options != nil {
 		if options.WithAssignedTasks {
-			query = query.Preload("AssignedTasks")
+			query = query.Preload("AssignedTasks.Author")
 		}
 		if options.WithCreatedTasks {
-			query = query.Preload("CreatedTasks")
+			query = query.Preload("CreatedTasks.Author")
 		}
 	}
 
