@@ -2,9 +2,11 @@ package discord
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/Formula-SAE/discord/internal/db"
 	"github.com/bwmarrin/discordgo"
+	"github.com/gorilla/mux"
 )
 
 type DiscordBot struct {
@@ -12,18 +14,23 @@ type DiscordBot struct {
 	db      *db.DB
 	appID   string
 	guildID string
+
+	router *mux.Router
 }
 
-func NewDiscordBot(s *discordgo.Session, db *db.DB, appID string, guildID string) *DiscordBot {
+func NewDiscordBot(s *discordgo.Session, db *db.DB, appID string, guildID string, router *mux.Router) *DiscordBot {
 	return &DiscordBot{
 		session: s,
 		db:      db,
 		appID:   appID,
 		guildID: guildID,
+		router:  router,
 	}
 }
 
 func (b *DiscordBot) Start() (func() error, error) {
+	b.router.HandleFunc("/push", b.onPushWebhook).Methods("POST")
+
 	err := b.session.Open()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open Discord session: %v", err)
@@ -34,10 +41,12 @@ func (b *DiscordBot) Start() (func() error, error) {
 	b.session.AddHandler(b.getAssignedTasksCommand)
 	b.session.AddHandler(b.getTaskCommand)
 	b.session.AddHandler(b.getTasksByRoleCommand)
-	b.session.AddHandler(b.getUnassignedTasksCommandByRole)
+	b.session.AddHandler(b.getUnassignedTasksByRoleCommand)
 	b.session.AddHandler(b.assignTaskCommand)
 	b.session.AddHandler(b.updateTaskStatusCommand)
 	b.session.AddHandler(b.getCompletedTasksByRoleCommand)
+	b.session.AddHandler(b.subscribeChannelToPushWebhookCommand)
+	b.session.AddHandler(b.unsubscribeChannelFromPushWebhookCommand)
 	fmt.Printf("[bot] Command handlers registered\n")
 
 	commands := []*discordgo.ApplicationCommand{
@@ -173,6 +182,30 @@ func (b *DiscordBot) Start() (func() error, error) {
 				},
 			},
 		},
+		{
+			Name:        "subscribe-channel-to-push",
+			Description: "Subscribe a channel to push webhook for a repository",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "repository",
+					Description: "The repository to subscribe to",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "unsubscribe-channel-from-push",
+			Description: "Unsubscribe a channel from push webhook for a repository",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "repository",
+					Description: "The repository to unsubscribe from",
+					Required:    true,
+				},
+			},
+		},
 	}
 
 	for _, command := range commands {
@@ -182,6 +215,8 @@ func (b *DiscordBot) Start() (func() error, error) {
 		}
 		fmt.Printf("[bot] Created command: %s\n", command.Name)
 	}
+
+	go http.ListenAndServe(":8080", b.router)
 
 	return b.session.Close, nil
 }

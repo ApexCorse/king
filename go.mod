@@ -4,6 +4,7 @@ go 1.23.1
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
+	github.com/gorilla/mux v1.8.1
 	github.com/stretchr/testify v1.11.1
 	github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d
 	gorm.io/driver/sqlite v1.6.0

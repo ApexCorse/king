@@ -46,3 +46,10 @@ type TaskComment struct {
 
 	TaskID uint
 }
+
+type WebhookSubscriptions struct {
+	gorm.Model
+
+	Repository string
+	ChannelID  string
+}
