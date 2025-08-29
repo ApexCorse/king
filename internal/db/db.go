@@ -223,3 +223,17 @@ func (d *DB) DeleteWebhookSubscription(repoName string, channelID string) error 
 
 	return d.db.Delete(webhookSubscription).Error
 }
+
+func (d *DB) CreateRepository(repo *Repository) error {
+	return d.db.Create(repo).Error
+}
+
+func (d *DB) GetAllRepositories() ([]Repository, error) {
+	repositories := make([]Repository, 0)
+
+	if err := d.db.Order("name").Find(&repositories).Error; err != nil {
+		return nil, err
+	}
+
+	return repositories, nil
+}
