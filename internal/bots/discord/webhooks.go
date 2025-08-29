@@ -32,13 +32,13 @@ func (b *DiscordBot) onPushWebhook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Received push event for repository: %s", body)
-
+	
 	payload := &PushEvent{}
 	if err := json.Unmarshal(body, payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	log.Printf("Received push event:\n%+v", payload)
 
 	msg := formatPushEvent(payload)
 	log.Printf("Formatted push event: %s", msg)
