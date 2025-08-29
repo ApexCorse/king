@@ -12,6 +12,7 @@ import (
 	"github.com/Formula-SAE/discord/internal/bots/discord"
 	"github.com/Formula-SAE/discord/internal/db"
 	"github.com/bwmarrin/discordgo"
+	"github.com/gorilla/mux"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
@@ -50,7 +51,7 @@ func main() {
 	log.Println("Database connection established successfully")
 
 	log.Println("Running database migrations...")
-	err = gormDB.AutoMigrate(&db.User{}, &db.Task{}, &db.TaskComment{})
+	err = gormDB.AutoMigrate(&db.User{}, &db.Task{}, &db.TaskComment{}, &db.WebhookSubscriptions{})
 	if err != nil {
 		log.Fatalf("Failed to run database migrations: %v", err)
 	}
@@ -66,8 +67,10 @@ func main() {
 	}
 	log.Println("Discord session created successfully")
 
+	router := mux.NewRouter()
+
 	log.Println("Creating Discord bot instance...")
-	discordBot := discord.NewDiscordBot(session, DB, appID, guildID)
+	discordBot := discord.NewDiscordBot(session, DB, appID, guildID, router)
 
 	log.Println("Starting Discord bot...")
 	close, err := discordBot.Start()

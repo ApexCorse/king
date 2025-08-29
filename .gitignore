@@ -4,3 +4,4 @@
 bin
 king.db
 .mock
+tmp

@@ -179,3 +179,21 @@ func (d *DB) UpdateTaskStatus(taskID int64, status string) (*Task, error) {
 
 	return task, nil
 }
+
+func (d *DB) GetWebhookSubscriptionsByRepository(repoName string) ([]WebhookSubscriptions, error) {
+	subscriptions := make([]WebhookSubscriptions, 0)
+
+	if err := d.db.Where("repository = ?", repoName).Find(&subscriptions).Error; err != nil {
+		return nil, err
+	}
+
+	return subscriptions, nil
+}
+
+func (d *DB) CreateWebhookSubscription(subscription *WebhookSubscriptions) error {
+	return d.db.Create(subscription).Error
+}
+
+func (d *DB) DeleteWebhookSubscription(repoName string, channelID string) error {
+	return d.db.Where("repository = ? AND channel_id = ?", repoName, channelID).Delete(&WebhookSubscriptions{}).Error
+}
