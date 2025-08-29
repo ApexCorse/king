@@ -743,12 +743,8 @@ func (b *DiscordBot) subscribeChannelToPushWebhookCommand(s *discordgo.Session, 
 	}
 
 	repo := options[0].StringValue()
-	subscription := &db.WebhookSubscriptions{
-		Repository: repo,
-		ChannelID:  i.ChannelID,
-	}
 
-	err := b.db.CreateWebhookSubscription(subscription)
+	_, err := b.db.CreateWebhookSubscription(repo, i.ChannelID)
 	if err != nil {
 		fmt.Printf("[subscribe-channel-to-push] Failed to create webhook subscription: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{

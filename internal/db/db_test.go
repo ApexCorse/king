@@ -1896,27 +1896,24 @@ func TestGetWebhookSubscriptionsByRepository(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		// Create webhook subscriptions for the same repository
-		subscription1 := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel123",
-		}
-		err := db.CreateWebhookSubscription(subscription1)
+		// Create repositories first
+		repo1 := &Repository{Name: "test-repo"}
+		err := gormDB.Create(repo1).Error
 		require.NoError(t, err)
 
-		subscription2 := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel456",
-		}
-		err = db.CreateWebhookSubscription(subscription2)
+		repo2 := &Repository{Name: "other-repo"}
+		err = gormDB.Create(repo2).Error
+		require.NoError(t, err)
+
+		// Create webhook subscriptions for the same repository
+		_, err = db.CreateWebhookSubscription("test-repo", "channel123")
+		require.NoError(t, err)
+
+		_, err = db.CreateWebhookSubscription("test-repo", "channel456")
 		require.NoError(t, err)
 
 		// Create subscription for different repository
-		subscription3 := &WebhookSubscriptions{
-			Repository: "other-repo",
-			ChannelID:  "channel789",
-		}
-		err = db.CreateWebhookSubscription(subscription3)
+		_, err = db.CreateWebhookSubscription("other-repo", "channel789")
 		require.NoError(t, err)
 
 		// Retrieve subscriptions for "test-repo"
@@ -1928,7 +1925,7 @@ func TestGetWebhookSubscriptionsByRepository(t *testing.T) {
 		channelIDs := make(map[string]bool)
 		for _, sub := range subscriptions {
 			channelIDs[sub.ChannelID] = true
-			assert.Equal(t, "test-repo", sub.Repository)
+			assert.Equal(t, "test-repo", sub.Repository.Name)
 			assert.NotZero(t, sub.ID)
 		}
 		assert.True(t, channelIDs["channel123"])
@@ -1940,12 +1937,12 @@ func TestGetWebhookSubscriptionsByRepository(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		// Create subscription for different repository
-		subscription := &WebhookSubscriptions{
-			Repository: "existing-repo",
-			ChannelID:  "channel123",
-		}
-		err := db.CreateWebhookSubscription(subscription)
+		// Create repository and subscription
+		repo := &Repository{Name: "existing-repo"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
+
+		_, err = db.CreateWebhookSubscription("existing-repo", "channel123")
 		require.NoError(t, err)
 
 		// Retrieve subscriptions for non-existent repository
@@ -1968,12 +1965,13 @@ func TestGetWebhookSubscriptionsByRepository(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		// Create subscription with "Test-Repo" (capitalized)
-		subscription := &WebhookSubscriptions{
-			Repository: "Test-Repo",
-			ChannelID:  "channel123",
-		}
-		err := db.CreateWebhookSubscription(subscription)
+		// Create repository with "Test-Repo" (capitalized)
+		repo := &Repository{Name: "Test-Repo"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
+
+		// Create subscription
+		_, err = db.CreateWebhookSubscription("Test-Repo", "channel123")
 		require.NoError(t, err)
 
 		// Try to retrieve with "test-repo" (lowercase)
@@ -1985,13 +1983,21 @@ func TestGetWebhookSubscriptionsByRepository(t *testing.T) {
 		subscriptions, err = db.GetWebhookSubscriptionsByRepository("Test-Repo")
 		assert.NoError(t, err)
 		assert.Len(t, subscriptions, 1)
-		assert.Equal(t, "Test-Repo", subscriptions[0].Repository)
+		assert.Equal(t, "Test-Repo", subscriptions[0].Repository.Name)
 		assert.Equal(t, "channel123", subscriptions[0].ChannelID)
 	})
 
 	t.Run("multiple repositories with subscriptions", func(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
+
+		// Create repositories first
+		repos := []string{"repo1", "repo2", "repo3"}
+		for _, repoName := range repos {
+			repo := &Repository{Name: repoName}
+			err := gormDB.Create(repo).Error
+			require.NoError(t, err)
+		}
 
 		// Create subscriptions for different repositories
 		subscriptions := []struct {
@@ -2007,11 +2013,7 @@ func TestGetWebhookSubscriptionsByRepository(t *testing.T) {
 		}
 
 		for _, subData := range subscriptions {
-			subscription := &WebhookSubscriptions{
-				Repository: subData.repository,
-				ChannelID:  subData.channelID,
-			}
-			err := db.CreateWebhookSubscription(subscription)
+			_, err := db.CreateWebhookSubscription(subData.repository, subData.channelID)
 			require.NoError(t, err)
 		}
 
@@ -2020,7 +2022,7 @@ func TestGetWebhookSubscriptionsByRepository(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, repo1Subs, 2)
 		for _, sub := range repo1Subs {
-			assert.Equal(t, "repo1", sub.Repository)
+			assert.Equal(t, "repo1", sub.Repository.Name)
 		}
 
 		// Test repo2 (should get 3 subscriptions)
@@ -2028,14 +2030,14 @@ func TestGetWebhookSubscriptionsByRepository(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, repo2Subs, 3)
 		for _, sub := range repo2Subs {
-			assert.Equal(t, "repo2", sub.Repository)
+			assert.Equal(t, "repo2", sub.Repository.Name)
 		}
 
 		// Test repo3 (should get 1 subscription)
 		repo3Subs, err := db.GetWebhookSubscriptionsByRepository("repo3")
 		assert.NoError(t, err)
 		assert.Len(t, repo3Subs, 1)
-		assert.Equal(t, "repo3", repo3Subs[0].Repository)
+		assert.Equal(t, "repo3", repo3Subs[0].Repository.Name)
 		assert.Equal(t, "channel6", repo3Subs[0].ChannelID)
 	})
 }
@@ -2045,42 +2047,41 @@ func TestCreateWebhookSubscription(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		subscription := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel123",
-		}
+		// Create repository first
+		repo := &Repository{Name: "test-repo"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
 
-		err := db.CreateWebhookSubscription(subscription)
+		subscription, err := db.CreateWebhookSubscription("test-repo", "channel123")
 		assert.NoError(t, err)
 		assert.NotZero(t, subscription.ID)
+		assert.Equal(t, "channel123", subscription.ChannelID)
+		assert.Equal(t, repo.ID, subscription.RepositoryID)
 
 		// Verify subscription was saved to database
-		dbSubscription := &WebhookSubscriptions{}
+		dbSubscription := &WebhookSubscription{}
 		err = gormDB.First(dbSubscription, subscription.ID).Error
 		assert.NoError(t, err)
-		assert.Equal(t, subscription.Repository, dbSubscription.Repository)
 		assert.Equal(t, subscription.ChannelID, dbSubscription.ChannelID)
+		assert.Equal(t, subscription.RepositoryID, dbSubscription.RepositoryID)
 	})
 
 	t.Run("create multiple subscriptions for same repository", func(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
+		// Create repository first
+		repo := &Repository{Name: "test-repo"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
+
 		// Create first subscription
-		subscription1 := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel123",
-		}
-		err := db.CreateWebhookSubscription(subscription1)
+		subscription1, err := db.CreateWebhookSubscription("test-repo", "channel123")
 		assert.NoError(t, err)
 		assert.NotZero(t, subscription1.ID)
 
 		// Create second subscription for same repository
-		subscription2 := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel456",
-		}
-		err = db.CreateWebhookSubscription(subscription2)
+		subscription2, err := db.CreateWebhookSubscription("test-repo", "channel456")
 		assert.NoError(t, err)
 		assert.NotZero(t, subscription2.ID)
 
@@ -2090,77 +2091,71 @@ func TestCreateWebhookSubscription(t *testing.T) {
 		assert.Len(t, subscriptions, 2)
 	})
 
-	t.Run("create subscription with empty repository", func(t *testing.T) {
+	t.Run("create subscription for non-existent repository", func(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		subscription := &WebhookSubscriptions{
-			Repository: "",
-			ChannelID:  "channel123",
-		}
-
-		err := db.CreateWebhookSubscription(subscription)
-		assert.NoError(t, err) // GORM allows empty strings
-		assert.NotZero(t, subscription.ID)
+		// Try to create subscription for non-existent repository
+		subscription, err := db.CreateWebhookSubscription("non-existent-repo", "channel123")
+		assert.Error(t, err)
+		assert.Nil(t, subscription)
+		assert.Contains(t, err.Error(), "failed to get repository")
 	})
 
-	t.Run("create subscription with empty channel ID", func(t *testing.T) {
+	t.Run("create subscription with empty repository name", func(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		subscription := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "",
-		}
-
-		err := db.CreateWebhookSubscription(subscription)
-		assert.NoError(t, err) // GORM allows empty strings
-		assert.NotZero(t, subscription.ID)
+		// Try to create subscription with empty repository name
+		subscription, err := db.CreateWebhookSubscription("", "channel123")
+		assert.Error(t, err)
+		assert.Nil(t, subscription)
+		assert.Contains(t, err.Error(), "failed to get repository")
 	})
 
 	t.Run("create subscription with special characters", func(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		subscription := &WebhookSubscriptions{
-			Repository: "test-repo/with-special-chars_123",
-			ChannelID:  "channel-with-special-chars_123",
-		}
+		// Create repository with special characters
+		repo := &Repository{Name: "test-repo/with-special-chars_123"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
 
-		err := db.CreateWebhookSubscription(subscription)
+		subscription, err := db.CreateWebhookSubscription("test-repo/with-special-chars_123", "channel-with-special-chars_123")
 		assert.NoError(t, err)
 		assert.NotZero(t, subscription.ID)
 
 		// Verify subscription was saved correctly
-		dbSubscription := &WebhookSubscriptions{}
+		dbSubscription := &WebhookSubscription{}
 		err = gormDB.First(dbSubscription, subscription.ID).Error
 		assert.NoError(t, err)
-		assert.Equal(t, subscription.Repository, dbSubscription.Repository)
-		assert.Equal(t, subscription.ChannelID, dbSubscription.ChannelID)
+		assert.Equal(t, "channel-with-special-chars_123", dbSubscription.ChannelID)
+		assert.Equal(t, repo.ID, dbSubscription.RepositoryID)
 	})
 
 	t.Run("create subscription with very long values", func(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		longRepo := "very-long-repository-name-that-might-exceed-normal-lengths-and-test-the-database-limits"
+		longRepoName := "very-long-repository-name-that-might-exceed-normal-lengths-and-test-the-database-limits"
 		longChannel := "very-long-channel-id-that-might-exceed-normal-lengths-and-test-the-database-limits"
 
-		subscription := &WebhookSubscriptions{
-			Repository: longRepo,
-			ChannelID:  longChannel,
-		}
+		// Create repository with long name
+		repo := &Repository{Name: longRepoName}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
 
-		err := db.CreateWebhookSubscription(subscription)
+		subscription, err := db.CreateWebhookSubscription(longRepoName, longChannel)
 		assert.NoError(t, err)
 		assert.NotZero(t, subscription.ID)
 
 		// Verify subscription was saved correctly
-		dbSubscription := &WebhookSubscriptions{}
+		dbSubscription := &WebhookSubscription{}
 		err = gormDB.First(dbSubscription, subscription.ID).Error
 		assert.NoError(t, err)
-		assert.Equal(t, subscription.Repository, dbSubscription.Repository)
-		assert.Equal(t, subscription.ChannelID, dbSubscription.ChannelID)
+		assert.Equal(t, longChannel, dbSubscription.ChannelID)
+		assert.Equal(t, repo.ID, dbSubscription.RepositoryID)
 	})
 }
 
@@ -2169,12 +2164,13 @@ func TestDeleteWebhookSubscription(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
+		// Create repository first
+		repo := &Repository{Name: "test-repo"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
+
 		// Create subscription
-		subscription := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel123",
-		}
-		err := db.CreateWebhookSubscription(subscription)
+		subscription, err := db.CreateWebhookSubscription("test-repo", "channel123")
 		require.NoError(t, err)
 		require.NotZero(t, subscription.ID)
 
@@ -2197,17 +2193,17 @@ func TestDeleteWebhookSubscription(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		// Create a subscription
-		subscription1 := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel123",
-		}
-		err := db.CreateWebhookSubscription(subscription1)
+		// Create repository and subscription
+		repo := &Repository{Name: "test-repo"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
+
+		subscription1, err := db.CreateWebhookSubscription("test-repo", "channel123")
 		require.NoError(t, err)
 
 		// Try to delete a non-existent subscription
 		err = db.DeleteWebhookSubscription("test-repo", "channel456")
-		assert.NoError(t, err) // GORM doesn't return error for non-existent records
+		assert.Error(t, err)
 
 		// Verify original subscription still exists
 		subscriptions, err := db.GetWebhookSubscriptionsByRepository("test-repo")
@@ -2220,26 +2216,19 @@ func TestDeleteWebhookSubscription(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
+		// Create repository first
+		repo := &Repository{Name: "test-repo"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
+
 		// Create multiple subscriptions for same repository
-		subscription1 := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel123",
-		}
-		err := db.CreateWebhookSubscription(subscription1)
+		_, err = db.CreateWebhookSubscription("test-repo", "channel123")
 		require.NoError(t, err)
 
-		subscription2 := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel456",
-		}
-		err = db.CreateWebhookSubscription(subscription2)
+		_, err = db.CreateWebhookSubscription("test-repo", "channel456")
 		require.NoError(t, err)
 
-		subscription3 := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel789",
-		}
-		err = db.CreateWebhookSubscription(subscription3)
+		_, err = db.CreateWebhookSubscription("test-repo", "channel789")
 		require.NoError(t, err)
 
 		// Verify all subscriptions exist
@@ -2270,19 +2259,20 @@ func TestDeleteWebhookSubscription(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		// Create subscriptions for different repositories
-		subscription1 := &WebhookSubscriptions{
-			Repository: "repo1",
-			ChannelID:  "channel123",
-		}
-		err := db.CreateWebhookSubscription(subscription1)
+		// Create repositories first
+		repo1 := &Repository{Name: "repo1"}
+		err := gormDB.Create(repo1).Error
 		require.NoError(t, err)
 
-		subscription2 := &WebhookSubscriptions{
-			Repository: "repo2",
-			ChannelID:  "channel456",
-		}
-		err = db.CreateWebhookSubscription(subscription2)
+		repo2 := &Repository{Name: "repo2"}
+		err = gormDB.Create(repo2).Error
+		require.NoError(t, err)
+
+		// Create subscriptions for different repositories
+		_, err = db.CreateWebhookSubscription("repo1", "channel123")
+		require.NoError(t, err)
+
+		subscription2, err := db.CreateWebhookSubscription("repo2", "channel456")
 		require.NoError(t, err)
 
 		// Delete subscription from repo1
@@ -2305,12 +2295,13 @@ func TestDeleteWebhookSubscription(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
+		// Create repository first
+		repo := &Repository{Name: "test-repo"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
+
 		// Create subscription
-		subscription := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel123",
-		}
-		err := db.CreateWebhookSubscription(subscription)
+		subscription, err := db.CreateWebhookSubscription("test-repo", "channel123")
 		require.NoError(t, err)
 		originalID := subscription.ID
 
@@ -2324,11 +2315,7 @@ func TestDeleteWebhookSubscription(t *testing.T) {
 		assert.Empty(t, subscriptions)
 
 		// Recreate subscription with same data
-		newSubscription := &WebhookSubscriptions{
-			Repository: "test-repo",
-			ChannelID:  "channel123",
-		}
-		err = db.CreateWebhookSubscription(newSubscription)
+		newSubscription, err := db.CreateWebhookSubscription("test-repo", "channel123")
 		assert.NoError(t, err)
 		assert.NotZero(t, newSubscription.ID)
 		assert.NotEqual(t, originalID, newSubscription.ID) // Should have different ID
