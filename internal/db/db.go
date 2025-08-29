@@ -1,13 +1,16 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 	"slices"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
+
+type UserRetrieveOptions struct {
+	WithAssignedTasks bool
+	WithCreatedTasks  bool
+}
 
 type DB struct {
 	db *gorm.DB
@@ -21,10 +24,27 @@ func (d *DB) CreateUser(user *User) error {
 	return d.db.Create(user).Error
 }
 
-func (d *DB) GetUserByDiscordID(discordID string) (*User, error) {
+func (d *DB) GetUserByID(id uint) (*User, error) {
 	user := &User{}
+	if err := d.db.First(user, id).Error; err != nil {
+		return nil, err
+	}
+	return user, nil
+}
 
-	if err := d.db.Where("discord_id = ?", discordID).First(user).Error; err != nil {
+func (d *DB) GetUserByDiscordID(discordID string, options *UserRetrieveOptions) (*User, error) {
+	user := &User{}
+	query := d.db
+	if options != nil {
+		if options.WithAssignedTasks {
+			query = query.Preload("AssignedTasks")
+		}
+		if options.WithCreatedTasks {
+			query = query.Preload("CreatedTasks")
+		}
+	}
+
+	if err := query.Where("discord_id = ?", discordID).First(user).Error; err != nil {
 		return nil, err
 	}
 
@@ -39,7 +59,7 @@ func (d *DB) CreateTaskWithUserDiscordID(task *Task, authorID string, assigneeID
 
 	// Run author query in parallel
 	go func() {
-		author, err := d.GetUserByDiscordID(authorID)
+		author, err := d.GetUserByDiscordID(authorID, nil)
 		if err != nil {
 			errorChan <- err
 			return
@@ -50,7 +70,7 @@ func (d *DB) CreateTaskWithUserDiscordID(task *Task, authorID string, assigneeID
 	// Run assignee query in parallel
 	if assigneeID != "" {
 		go func() {
-			assignee, err := d.GetUserByDiscordID(assigneeID)
+			assignee, err := d.GetUserByDiscordID(assigneeID, nil)
 			if err != nil {
 				errorChan <- err
 				return
@@ -76,36 +96,16 @@ func (d *DB) CreateTaskWithUserDiscordID(task *Task, authorID string, assigneeID
 
 	task.AuthorID = author.ID
 	if assigneeID != "" {
-		task.AssignedUserID = sql.NullInt64{
-			Int64: int64(assignee.ID),
-			Valid: true,
-		}
+		task.AssignedUsers = append(task.AssignedUsers, *assignee)
 	}
 
 	return d.db.Create(task).Error
 }
 
-func (d *DB) GetAssignedTasksByUserDiscordID(userID string) ([]Task, error) {
-	tasks := make([]Task, 0)
-
-	user, err := d.GetUserByDiscordID(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := d.db.Preload("Author").Preload("AssignedUser").
-		Where("assigned_user_id = ? AND status != ?", int64(user.ID), TASK_COMPLETED).
-		Find(&tasks).Error; err != nil {
-		return nil, err
-	}
-
-	return tasks, nil
-}
-
-func (d *DB) GetTaskByID(id int64) (*Task, error) {
+func (d *DB) GetTaskByID(id uint) (*Task, error) {
 	task := &Task{}
 
-	if err := d.db.Preload("Author").Preload("AssignedUser").First(task, id).Error; err != nil {
+	if err := d.db.Preload("Author").Preload("AssignedUsers").First(task, id).Error; err != nil {
 		return nil, err
 	}
 
@@ -117,7 +117,7 @@ func (d *DB) GetCompletedTasksByRole(role string) ([]Task, error) {
 	if role == "" {
 		return nil, fmt.Errorf("role cannot be empty")
 	}
-	if err := d.db.Preload("Author").Preload("AssignedUser").
+	if err := d.db.Preload("Author").Preload("AssignedUsers").
 		Where("role = ? AND status = ?", role, TASK_COMPLETED).
 		Find(&tasks).Error; err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (d *DB) GetTasksByRole(role string) ([]Task, error) {
 	if role == "" {
 		return nil, fmt.Errorf("role cannot be empty")
 	}
-	if err := d.db.Preload("Author").Preload("AssignedUser").
+	if err := d.db.Preload("Author").Preload("AssignedUsers").
 		Where("role = ? AND status != ?", role, TASK_COMPLETED).
 		Find(&tasks).Error; err != nil {
 		return nil, err
@@ -143,23 +143,39 @@ func (d *DB) GetUnassignedTasksByRole(role string) ([]Task, error) {
 	if role == "" {
 		return nil, fmt.Errorf("role cannot be empty")
 	}
-	if err := d.db.Preload("Author").Preload("AssignedUser").
-		Where("role = ? AND assigned_user_id IS NULL AND status != ?", role, TASK_COMPLETED).
+	if err := d.db.Preload("Author").Preload("AssignedUsers").
+		Where("role = ? AND status != ?", role, TASK_COMPLETED).
 		Find(&tasks).Error; err != nil {
 		return nil, err
 	}
-	return tasks, nil
+
+	unassignedTasks := make([]Task, 0)
+	for _, task := range tasks {
+		if len(task.AssignedUsers) == 0 {
+			unassignedTasks = append(unassignedTasks, task)
+		}
+	}
+
+	return unassignedTasks, nil
 }
 
-func (d *DB) AssignTask(taskID int64, userID int64) error {
-	if err := d.db.Model(&Task{}).Where("id = ?", taskID).Update("assigned_user_id", userID).Error; err != nil {
+func (d *DB) AssignTask(taskID uint, userID uint) error {
+	task := &Task{}
+	task.ID = taskID
+
+	user, err := d.GetUserByID(userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if err := d.db.Model(task).Association("AssignedUsers").Append(user); err != nil {
 		return fmt.Errorf("failed to assign task: %w", err)
 	}
 
 	return nil
 }
 
-func (d *DB) UpdateTaskStatus(taskID int64, status string) (*Task, error) {
+func (d *DB) UpdateTaskStatus(taskID uint, status string) (*Task, error) {
 	validStatuses := []string{TASK_NOT_STARTED, TASK_IN_PROGRESS, TASK_COMPLETED}
 	isValid := slices.Contains(validStatuses, status)
 
@@ -168,12 +184,13 @@ func (d *DB) UpdateTaskStatus(taskID int64, status string) (*Task, error) {
 			status, TASK_NOT_STARTED, TASK_IN_PROGRESS, TASK_COMPLETED)
 	}
 
-	task := &Task{}
+	task, err := d.GetTaskByID(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task: %w", err)
+	}
+	task.Status = status
 
-	if err := d.db.Model(task).
-		Clauses(clause.Returning{}).
-		Where("id = ?", taskID).
-		Update("status", status).Error; err != nil {
+	if err := d.db.Save(task).Error; err != nil {
 		return nil, fmt.Errorf("failed to update task status: %w", err)
 	}
 

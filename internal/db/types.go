@@ -1,8 +1,6 @@
 package db
 
 import (
-	"database/sql"
-
 	"gorm.io/gorm"
 )
 
@@ -18,7 +16,7 @@ type User struct {
 	Username  string `gorm:"unique"`
 	DiscordID string `gorm:"unique"`
 
-	AssignedTasks []Task `gorm:"foreignKey:AssignedUserID"`
+	AssignedTasks []Task `gorm:"many2many:task_assignments"`
 	CreatedTasks  []Task `gorm:"foreignKey:AuthorID"`
 }
 
@@ -33,8 +31,7 @@ type Task struct {
 	AuthorID uint
 	Author   User
 
-	AssignedUserID sql.NullInt64
-	AssignedUser   User
+	AssignedUsers []User `gorm:"many2many:task_assignments"`
 
 	Comments []TaskComment
 }

@@ -83,7 +83,7 @@ func TestGetUserByDiscordID(t *testing.T) {
 		require.NoError(t, err)
 
 		// Retrieve user by Discord ID
-		retrievedUser, err := db.GetUserByDiscordID("1234567890")
+		retrievedUser, err := db.GetUserByDiscordID("1234567890", nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, retrievedUser)
 		assert.Equal(t, user.ID, retrievedUser.ID)
@@ -96,7 +96,7 @@ func TestGetUserByDiscordID(t *testing.T) {
 		db := NewDB(gormDB)
 
 		// Try to retrieve non-existent user
-		user, err := db.GetUserByDiscordID("nonexistent")
+		user, err := db.GetUserByDiscordID("nonexistent", nil)
 		assert.Error(t, err)
 		assert.Nil(t, user)
 	})
@@ -105,7 +105,7 @@ func TestGetUserByDiscordID(t *testing.T) {
 		gormDB := CreateTestDB()
 		db := NewDB(gormDB)
 
-		user, err := db.GetUserByDiscordID("")
+		user, err := db.GetUserByDiscordID("", nil)
 		assert.Error(t, err)
 		assert.Nil(t, user)
 	})
@@ -141,20 +141,20 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotZero(t, task.ID)
 		assert.Equal(t, author.ID, task.AuthorID)
-		assert.True(t, task.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee.ID), task.AssignedUserID.Int64)
+		assert.Len(t, task.AssignedUsers, 1)
+		assert.Equal(t, assignee.ID, task.AssignedUsers[0].ID)
 
 		// Verify task was saved to database
 		dbTask := &Task{}
-		err = gormDB.Preload("Author").Preload("AssignedUser").First(dbTask, task.ID).Error
+		err = gormDB.Preload("Author").Preload("AssignedUsers").First(dbTask, task.ID).Error
 		assert.NoError(t, err)
 		assert.Equal(t, task.Title, dbTask.Title)
 		assert.Equal(t, task.Description, dbTask.Description)
 		assert.Equal(t, author.ID, dbTask.AuthorID)
-		assert.True(t, dbTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee.ID), dbTask.AssignedUserID.Int64)
+		assert.Len(t, dbTask.AssignedUsers, 1)
+		assert.Equal(t, assignee.ID, dbTask.AssignedUsers[0].ID)
 		assert.Equal(t, author.Username, dbTask.Author.Username)
-		assert.Equal(t, assignee.Username, dbTask.AssignedUser.Username)
+		assert.Equal(t, assignee.Username, dbTask.AssignedUsers[0].Username)
 	})
 
 	t.Run("author not found", func(t *testing.T) {
@@ -235,8 +235,8 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotZero(t, task.ID)
 		assert.Equal(t, user.ID, task.AuthorID)
-		assert.True(t, task.AssignedUserID.Valid)
-		assert.Equal(t, int64(user.ID), task.AssignedUserID.Int64)
+		assert.Len(t, task.AssignedUsers, 1)
+		assert.Equal(t, user.ID, task.AssignedUsers[0].ID)
 	})
 
 	t.Run("empty discord IDs", func(t *testing.T) {
@@ -275,18 +275,17 @@ func TestCreateTaskWithUserDiscordID(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotZero(t, task.ID)
 		assert.Equal(t, author.ID, task.AuthorID)
-		assert.False(t, task.AssignedUserID.Valid) // Should be invalid when no assignee
+		assert.Len(t, task.AssignedUsers, 0) // Should be invalid when no assignee
 
 		// Verify task was saved to database
 		dbTask := &Task{}
-		err = gormDB.Preload("Author").Preload("AssignedUser").First(dbTask, task.ID).Error
+		err = gormDB.Preload("Author").Preload("AssignedUsers").First(dbTask, task.ID).Error
 		assert.NoError(t, err)
 		assert.Equal(t, task.Title, dbTask.Title)
 		assert.Equal(t, task.Description, dbTask.Description)
 		assert.Equal(t, author.ID, dbTask.AuthorID)
-		assert.False(t, dbTask.AssignedUserID.Valid)
+		assert.Len(t, dbTask.AssignedUsers, 0)
 		assert.Equal(t, author.Username, dbTask.Author.Username)
-		assert.Zero(t, dbTask.AssignedUser.ID) // Should be zero when no assignee
 	})
 }
 
@@ -297,110 +296,6 @@ func TestNewDB(t *testing.T) {
 
 		assert.NotNil(t, db)
 		assert.Equal(t, gormDB, db.db)
-	})
-}
-
-func TestGetAssignedTasksByUserDiscordID(t *testing.T) {
-	t.Run("successful retrieval of assigned tasks", func(t *testing.T) {
-		gormDB := CreateTestDB()
-		db := NewDB(gormDB)
-
-		// Create users
-		author := &User{
-			Username:  "Author",
-			DiscordID: "author123",
-		}
-		err := db.CreateUser(author)
-		require.NoError(t, err)
-
-		assignee := &User{
-			Username:  "Assignee",
-			DiscordID: "assignee456",
-		}
-		err = db.CreateUser(assignee)
-		require.NoError(t, err)
-
-		// Create tasks assigned to the assignee
-		task1 := &Task{
-			Title:       "Task 1",
-			Description: "First task",
-		}
-		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
-		require.NoError(t, err)
-
-		task2 := &Task{
-			Title:       "Task 2",
-			Description: "Second task",
-		}
-		err = db.CreateTaskWithUserDiscordID(task2, "author123", "assignee456")
-		require.NoError(t, err)
-
-		// Create a task assigned to someone else
-		otherAssignee := &User{
-			Username:  "OtherAssignee",
-			DiscordID: "other789",
-		}
-		err = db.CreateUser(otherAssignee)
-		require.NoError(t, err)
-
-		task3 := &Task{
-			Title:       "Task 3",
-			Description: "Third task",
-		}
-		err = db.CreateTaskWithUserDiscordID(task3, "author123", "other789")
-		require.NoError(t, err)
-
-		// Retrieve tasks assigned to the first assignee
-		tasks, err := db.GetAssignedTasksByUserDiscordID("assignee456")
-		assert.NoError(t, err)
-		assert.Len(t, tasks, 2)
-
-		// Verify the tasks are the correct ones
-		taskIDs := make(map[uint]bool)
-		for _, task := range tasks {
-			taskIDs[task.ID] = true
-		}
-		assert.True(t, taskIDs[task1.ID])
-		assert.True(t, taskIDs[task2.ID])
-		assert.False(t, taskIDs[task3.ID])
-	})
-
-	t.Run("user with no assigned tasks", func(t *testing.T) {
-		gormDB := CreateTestDB()
-		db := NewDB(gormDB)
-
-		// Create a user with no tasks
-		user := &User{
-			Username:  "NoTasksUser",
-			DiscordID: "notasks123",
-		}
-		err := db.CreateUser(user)
-		require.NoError(t, err)
-
-		// Retrieve tasks for user with no assignments
-		tasks, err := db.GetAssignedTasksByUserDiscordID("notasks123")
-		assert.NoError(t, err)
-		assert.Empty(t, tasks)
-	})
-
-	t.Run("non-existent user discord ID", func(t *testing.T) {
-		gormDB := CreateTestDB()
-		db := NewDB(gormDB)
-
-		// Try to retrieve tasks for non-existent user
-		tasks, err := db.GetAssignedTasksByUserDiscordID("nonexistent")
-		assert.Error(t, err)
-		assert.Nil(t, tasks)
-	})
-
-	t.Run("empty discord ID", func(t *testing.T) {
-		gormDB := CreateTestDB()
-		db := NewDB(gormDB)
-
-		// Try to retrieve tasks with empty discord ID
-		tasks, err := db.GetAssignedTasksByUserDiscordID("")
-		assert.Error(t, err)
-		assert.Nil(t, tasks)
 	})
 }
 
@@ -433,17 +328,17 @@ func TestGetTaskByID(t *testing.T) {
 		require.NoError(t, err)
 
 		// Retrieve task by ID
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		assert.NoError(t, err)
 		assert.NotNil(t, retrievedTask)
 		assert.Equal(t, task.ID, retrievedTask.ID)
 		assert.Equal(t, task.Title, retrievedTask.Title)
 		assert.Equal(t, task.Description, retrievedTask.Description)
 		assert.Equal(t, author.ID, retrievedTask.AuthorID)
-		assert.True(t, retrievedTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee.ID), retrievedTask.AssignedUserID.Int64)
+		assert.Len(t, retrievedTask.AssignedUsers, 1)
+		assert.Equal(t, assignee.ID, retrievedTask.AssignedUsers[0].ID)
 		assert.Equal(t, author.Username, retrievedTask.Author.Username)
-		assert.Equal(t, assignee.Username, retrievedTask.AssignedUser.Username)
+		assert.Equal(t, assignee.Username, retrievedTask.AssignedUsers[0].Username)
 	})
 
 	t.Run("successful task retrieval without assignee", func(t *testing.T) {
@@ -467,16 +362,15 @@ func TestGetTaskByID(t *testing.T) {
 		require.NoError(t, err)
 
 		// Retrieve task by ID
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		assert.NoError(t, err)
 		assert.NotNil(t, retrievedTask)
 		assert.Equal(t, task.ID, retrievedTask.ID)
 		assert.Equal(t, task.Title, retrievedTask.Title)
 		assert.Equal(t, task.Description, retrievedTask.Description)
 		assert.Equal(t, author.ID, retrievedTask.AuthorID)
-		assert.False(t, retrievedTask.AssignedUserID.Valid)
+		assert.Len(t, retrievedTask.AssignedUsers, 0)
 		assert.Equal(t, author.Username, retrievedTask.Author.Username)
-		assert.Zero(t, retrievedTask.AssignedUser.ID) // Should be zero when no assignee
 	})
 
 	t.Run("task not found", func(t *testing.T) {
@@ -495,16 +389,6 @@ func TestGetTaskByID(t *testing.T) {
 
 		// Try to retrieve task with zero ID
 		task, err := db.GetTaskByID(0)
-		assert.Error(t, err)
-		assert.Nil(t, task)
-	})
-
-	t.Run("negative ID", func(t *testing.T) {
-		gormDB := CreateTestDB()
-		db := NewDB(gormDB)
-
-		// Try to retrieve task with negative ID
-		task, err := db.GetTaskByID(-1)
 		assert.Error(t, err)
 		assert.Nil(t, task)
 	})
@@ -575,7 +459,7 @@ func TestGetUnassignedTasksByRole(t *testing.T) {
 		for _, task := range tasks {
 			taskIDs[task.ID] = true
 			assert.Equal(t, "developer", task.Role)
-			assert.False(t, task.AssignedUserID.Valid)
+			assert.Len(t, task.AssignedUsers, 0)
 			assert.Equal(t, author.Username, task.Author.Username)
 		}
 		assert.True(t, taskIDs[task1.ID])
@@ -723,7 +607,7 @@ func TestGetUnassignedTasksByRole(t *testing.T) {
 		assert.Len(t, devTasks, 2)
 		for _, task := range devTasks {
 			assert.Equal(t, "developer", task.Role)
-			assert.False(t, task.AssignedUserID.Valid)
+			assert.Len(t, task.AssignedUsers, 0)
 		}
 
 		// Test designer role
@@ -731,14 +615,14 @@ func TestGetUnassignedTasksByRole(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, designerTasks, 1)
 		assert.Equal(t, "designer", designerTasks[0].Role)
-		assert.False(t, designerTasks[0].AssignedUserID.Valid)
+		assert.Len(t, designerTasks[0].AssignedUsers, 0)
 
 		// Test QA role
 		qaTasks, err := db.GetUnassignedTasksByRole("qa")
 		assert.NoError(t, err)
 		assert.Len(t, qaTasks, 1)
 		assert.Equal(t, "qa", qaTasks[0].Role)
-		assert.False(t, qaTasks[0].AssignedUserID.Valid)
+		assert.Len(t, qaTasks[0].AssignedUsers, 0)
 	})
 
 	t.Run("case sensitive role matching", func(t *testing.T) {
@@ -1023,9 +907,9 @@ func TestGetTasksByRole(t *testing.T) {
 		retrievedTask := tasks[0]
 		assert.Equal(t, task.ID, retrievedTask.ID)
 		assert.Equal(t, author.Username, retrievedTask.Author.Username)
-		assert.Equal(t, assignee.Username, retrievedTask.AssignedUser.Username)
-		assert.True(t, retrievedTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee.ID), retrievedTask.AssignedUserID.Int64)
+		assert.Len(t, retrievedTask.AssignedUsers, 1)
+		assert.Equal(t, assignee.Username, retrievedTask.AssignedUsers[0].Username)
+		assert.Equal(t, assignee.ID, retrievedTask.AssignedUsers[0].ID)
 	})
 }
 
@@ -1058,20 +942,20 @@ func TestAssignTask(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify task is initially unassigned
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
-		assert.False(t, retrievedTask.AssignedUserID.Valid)
+		assert.Len(t, retrievedTask.AssignedUsers, 0)
 
 		// Assign task to user
-		err = db.AssignTask(int64(task.ID), int64(assignee.ID))
+		err = db.AssignTask(task.ID, assignee.ID)
 		assert.NoError(t, err)
 
 		// Verify task is now assigned
-		retrievedTask, err = db.GetTaskByID(int64(task.ID))
+		retrievedTask, err = db.GetTaskByID(task.ID)
 		require.NoError(t, err)
-		assert.True(t, retrievedTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee.ID), retrievedTask.AssignedUserID.Int64)
-		assert.Equal(t, assignee.Username, retrievedTask.AssignedUser.Username)
+		assert.Len(t, retrievedTask.AssignedUsers, 1)
+		assert.Equal(t, assignee.ID, retrievedTask.AssignedUsers[0].ID)
+		assert.Equal(t, assignee.Username, retrievedTask.AssignedUsers[0].Username)
 	})
 
 	t.Run("assign task that is already assigned", func(t *testing.T) {
@@ -1109,21 +993,21 @@ func TestAssignTask(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify task is initially assigned to first user
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
-		assert.True(t, retrievedTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee1.ID), retrievedTask.AssignedUserID.Int64)
+		assert.Len(t, retrievedTask.AssignedUsers, 1)
+		assert.Equal(t, assignee1.ID, retrievedTask.AssignedUsers[0].ID)
 
 		// Reassign task to second user
-		err = db.AssignTask(int64(task.ID), int64(assignee2.ID))
+		err = db.AssignTask(task.ID, assignee2.ID)
 		assert.NoError(t, err)
 
-		// Verify task is now assigned to second user
-		retrievedTask, err = db.GetTaskByID(int64(task.ID))
+		// Verify task is now assigned to second user too
+		retrievedTask, err = db.GetTaskByID(task.ID)
 		require.NoError(t, err)
-		assert.True(t, retrievedTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee2.ID), retrievedTask.AssignedUserID.Int64)
-		assert.Equal(t, assignee2.Username, retrievedTask.AssignedUser.Username)
+		assert.Len(t, retrievedTask.AssignedUsers, 2)
+		assert.Equal(t, assignee2.ID, retrievedTask.AssignedUsers[1].ID)
+		assert.Equal(t, assignee2.Username, retrievedTask.AssignedUsers[1].Username)
 	})
 
 	t.Run("assign task to non-existent user ID", func(t *testing.T) {
@@ -1147,14 +1031,13 @@ func TestAssignTask(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to assign task to non-existent user ID
-		err = db.AssignTask(int64(task.ID), 999)
-		assert.NoError(t, err) // The function doesn't validate user existence
+		err = db.AssignTask(task.ID, 999)
+		assert.Error(t, err)
 
-		// Verify task is assigned to the non-existent user ID
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		// Verify task is not assigned
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
-		assert.True(t, retrievedTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(999), retrievedTask.AssignedUserID.Int64)
+		assert.Len(t, retrievedTask.AssignedUsers, 0)
 	})
 
 	t.Run("assign non-existent task", func(t *testing.T) {
@@ -1170,7 +1053,7 @@ func TestAssignTask(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to assign non-existent task
-		err = db.AssignTask(999, int64(user.ID))
+		err = db.AssignTask(999, user.ID)
 		assert.NoError(t, err) // The function doesn't validate task existence
 	})
 
@@ -1195,45 +1078,13 @@ func TestAssignTask(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to assign task with zero user ID
-		err = db.AssignTask(int64(task.ID), 0)
-		assert.NoError(t, err)
+		err = db.AssignTask(task.ID, 0)
+		assert.Error(t, err)
 
-		// Verify task is assigned to user ID 0
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		// Verify task is not assigned
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
-		assert.True(t, retrievedTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(0), retrievedTask.AssignedUserID.Int64)
-	})
-
-	t.Run("assign task with negative user ID", func(t *testing.T) {
-		gormDB := CreateTestDB()
-		db := NewDB(gormDB)
-
-		// Create author
-		author := &User{
-			Username:  "Author",
-			DiscordID: "author123",
-		}
-		err := db.CreateUser(author)
-		require.NoError(t, err)
-
-		// Create task without assignee
-		task := &Task{
-			Title:       "Unassigned Task",
-			Description: "Task to be assigned",
-		}
-		err = db.CreateTaskWithUserDiscordID(task, "author123", "")
-		require.NoError(t, err)
-
-		// Try to assign task with negative user ID
-		err = db.AssignTask(int64(task.ID), -1)
-		assert.NoError(t, err)
-
-		// Verify task is assigned to negative user ID
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
-		require.NoError(t, err)
-		assert.True(t, retrievedTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(-1), retrievedTask.AssignedUserID.Int64)
+		assert.Len(t, retrievedTask.AssignedUsers, 0)
 	})
 }
 
@@ -1259,13 +1110,13 @@ func TestUpdateTaskStatus(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update status to "Not Started"
-		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_NOT_STARTED)
+		updatedTask, err := db.UpdateTaskStatus(task.ID, TASK_NOT_STARTED)
 		assert.NoError(t, err)
 		assert.NotNil(t, updatedTask)
 		assert.Equal(t, TASK_NOT_STARTED, updatedTask.Status)
 
 		// Verify the update in database
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
 		assert.Equal(t, TASK_NOT_STARTED, retrievedTask.Status)
 	})
@@ -1291,13 +1142,13 @@ func TestUpdateTaskStatus(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update status to "In Progress"
-		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_IN_PROGRESS)
+		updatedTask, err := db.UpdateTaskStatus(task.ID, TASK_IN_PROGRESS)
 		assert.NoError(t, err)
 		assert.NotNil(t, updatedTask)
 		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
 
 		// Verify the update in database
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
 		assert.Equal(t, TASK_IN_PROGRESS, retrievedTask.Status)
 	})
@@ -1323,13 +1174,13 @@ func TestUpdateTaskStatus(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update status to "Completed"
-		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_COMPLETED)
+		updatedTask, err := db.UpdateTaskStatus(task.ID, TASK_COMPLETED)
 		assert.NoError(t, err)
 		assert.NotNil(t, updatedTask)
 		assert.Equal(t, TASK_COMPLETED, updatedTask.Status)
 
 		// Verify the update in database
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
 		assert.Equal(t, TASK_COMPLETED, retrievedTask.Status)
 	})
@@ -1361,18 +1212,21 @@ func TestUpdateTaskStatus(t *testing.T) {
 		}
 		err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
 		require.NoError(t, err)
+		t.Logf("task: %+v", task)
 
 		// Update status
-		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_IN_PROGRESS)
+		updatedTask, err := db.UpdateTaskStatus(task.ID, TASK_IN_PROGRESS)
 		assert.NoError(t, err)
 		assert.NotNil(t, updatedTask)
+		t.Logf("updatedTask: %+v", updatedTask)
 
 		// Verify all other fields are preserved
 		assert.Equal(t, task.Title, updatedTask.Title)
 		assert.Equal(t, task.Description, updatedTask.Description)
 		assert.Equal(t, task.Role, updatedTask.Role)
 		assert.Equal(t, task.AuthorID, updatedTask.AuthorID)
-		assert.Equal(t, task.AssignedUserID, updatedTask.AssignedUserID)
+		assert.Len(t, updatedTask.AssignedUsers, 1)
+		assert.Equal(t, assignee.ID, updatedTask.AssignedUsers[0].ID)
 		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
 	})
 
@@ -1397,7 +1251,7 @@ func TestUpdateTaskStatus(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to update with invalid status
-		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), "Invalid Status")
+		updatedTask, err := db.UpdateTaskStatus(task.ID, "Invalid Status")
 		assert.Error(t, err)
 		assert.Nil(t, updatedTask)
 		assert.Contains(t, err.Error(), "invalid status")
@@ -1406,7 +1260,7 @@ func TestUpdateTaskStatus(t *testing.T) {
 		assert.Contains(t, err.Error(), TASK_COMPLETED)
 
 		// Verify task status was not changed
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
 		assert.Equal(t, TASK_NOT_STARTED, retrievedTask.Status) // Default status
 	})
@@ -1432,19 +1286,19 @@ func TestUpdateTaskStatus(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to update with lowercase status
-		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), "not started")
+		updatedTask, err := db.UpdateTaskStatus(task.ID, "not started")
 		assert.Error(t, err)
 		assert.Nil(t, updatedTask)
 		assert.Contains(t, err.Error(), "invalid status")
 
 		// Try to update with mixed case status
-		updatedTask, err = db.UpdateTaskStatus(int64(task.ID), "in progress")
+		updatedTask, err = db.UpdateTaskStatus(task.ID, "in progress")
 		assert.Error(t, err)
 		assert.Nil(t, updatedTask)
 		assert.Contains(t, err.Error(), "invalid status")
 
 		// Verify task status was not changed
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
 		assert.Equal(t, TASK_NOT_STARTED, retrievedTask.Status) // Default status
 	})
@@ -1455,10 +1309,8 @@ func TestUpdateTaskStatus(t *testing.T) {
 
 		// Try to update non-existent task
 		updatedTask, err := db.UpdateTaskStatus(999, TASK_IN_PROGRESS)
-		assert.NoError(t, err) // The method doesn't validate task existence
-		assert.NotNil(t, updatedTask)
-		assert.Equal(t, uint(0), updatedTask.ID) // Empty task object
-		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
+		assert.Error(t, err)
+		assert.Nil(t, updatedTask)
 	})
 
 	t.Run("zero task ID should return empty task object", func(t *testing.T) {
@@ -1467,22 +1319,8 @@ func TestUpdateTaskStatus(t *testing.T) {
 
 		// Try to update task with zero ID
 		updatedTask, err := db.UpdateTaskStatus(0, TASK_IN_PROGRESS)
-		assert.NoError(t, err) // The method doesn't validate task existence
-		assert.NotNil(t, updatedTask)
-		assert.Equal(t, uint(0), updatedTask.ID) // Empty task object
-		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
-	})
-
-	t.Run("negative task ID should return empty task object", func(t *testing.T) {
-		gormDB := CreateTestDB()
-		db := NewDB(gormDB)
-
-		// Try to update task with negative ID
-		updatedTask, err := db.UpdateTaskStatus(-1, TASK_IN_PROGRESS)
-		assert.NoError(t, err) // The method doesn't validate task existence
-		assert.NotNil(t, updatedTask)
-		assert.Equal(t, uint(0), updatedTask.ID) // Empty task object
-		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
+		assert.Error(t, err)
+		assert.Nil(t, updatedTask)
 	})
 
 	t.Run("empty status should return error", func(t *testing.T) {
@@ -1506,7 +1344,7 @@ func TestUpdateTaskStatus(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to update with empty status
-		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), "")
+		updatedTask, err := db.UpdateTaskStatus(task.ID, "")
 		assert.Error(t, err)
 		assert.Nil(t, updatedTask)
 		assert.Contains(t, err.Error(), "invalid status")
@@ -1533,20 +1371,20 @@ func TestUpdateTaskStatus(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update status multiple times
-		updatedTask, err := db.UpdateTaskStatus(int64(task.ID), TASK_IN_PROGRESS)
+		updatedTask, err := db.UpdateTaskStatus(task.ID, TASK_IN_PROGRESS)
 		assert.NoError(t, err)
 		assert.Equal(t, TASK_IN_PROGRESS, updatedTask.Status)
 
-		updatedTask, err = db.UpdateTaskStatus(int64(task.ID), TASK_COMPLETED)
+		updatedTask, err = db.UpdateTaskStatus(task.ID, TASK_COMPLETED)
 		assert.NoError(t, err)
 		assert.Equal(t, TASK_COMPLETED, updatedTask.Status)
 
-		updatedTask, err = db.UpdateTaskStatus(int64(task.ID), TASK_NOT_STARTED)
+		updatedTask, err = db.UpdateTaskStatus(task.ID, TASK_NOT_STARTED)
 		assert.NoError(t, err)
 		assert.Equal(t, TASK_NOT_STARTED, updatedTask.Status)
 
 		// Verify final status in database
-		retrievedTask, err := db.GetTaskByID(int64(task.ID))
+		retrievedTask, err := db.GetTaskByID(task.ID)
 		require.NoError(t, err)
 		assert.Equal(t, TASK_NOT_STARTED, retrievedTask.Status)
 	})
@@ -1582,7 +1420,7 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
 		require.NoError(t, err)
 		// Update status to completed
-		_, err = db.UpdateTaskStatus(int64(task1.ID), TASK_COMPLETED)
+		_, err = db.UpdateTaskStatus(task1.ID, TASK_COMPLETED)
 		require.NoError(t, err)
 
 		task2 := &Task{
@@ -1594,7 +1432,7 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 		err = db.CreateTaskWithUserDiscordID(task2, "author123", "assignee456")
 		require.NoError(t, err)
 		// Update status to completed
-		_, err = db.UpdateTaskStatus(int64(task2.ID), TASK_COMPLETED)
+		_, err = db.UpdateTaskStatus(task2.ID, TASK_COMPLETED)
 		require.NoError(t, err)
 
 		// Create non-completed task with "developer" role
@@ -1606,7 +1444,7 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 		err = db.CreateTaskWithUserDiscordID(task3, "author123", "assignee456")
 		require.NoError(t, err)
 		// Update status to in progress
-		_, err = db.UpdateTaskStatus(int64(task3.ID), TASK_IN_PROGRESS)
+		_, err = db.UpdateTaskStatus(task3.ID, TASK_IN_PROGRESS)
 		require.NoError(t, err)
 
 		// Create completed task with different role
@@ -1618,7 +1456,7 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 		err = db.CreateTaskWithUserDiscordID(task4, "author123", "assignee456")
 		require.NoError(t, err)
 		// Update status to completed
-		_, err = db.UpdateTaskStatus(int64(task4.ID), TASK_COMPLETED)
+		_, err = db.UpdateTaskStatus(task4.ID, TASK_COMPLETED)
 		require.NoError(t, err)
 
 		// Retrieve completed tasks for "developer" role
@@ -1667,7 +1505,7 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 		}
 		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
 		require.NoError(t, err)
-		_, err = db.UpdateTaskStatus(int64(task1.ID), TASK_IN_PROGRESS)
+		_, err = db.UpdateTaskStatus(task1.ID, TASK_IN_PROGRESS)
 		require.NoError(t, err)
 
 		task2 := &Task{
@@ -1712,7 +1550,7 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 		}
 		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
 		require.NoError(t, err)
-		_, err = db.UpdateTaskStatus(int64(task1.ID), TASK_COMPLETED)
+		_, err = db.UpdateTaskStatus(task1.ID, TASK_COMPLETED)
 		require.NoError(t, err)
 
 		// Retrieve completed tasks for "developer" role
@@ -1775,7 +1613,7 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 			}
 			err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
 			require.NoError(t, err)
-			_, err = db.UpdateTaskStatus(int64(task.ID), taskData.status)
+			_, err = db.UpdateTaskStatus(task.ID, taskData.status)
 			require.NoError(t, err)
 			createdTasks[i] = task
 		}
@@ -1831,7 +1669,7 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 		}
 		err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
 		require.NoError(t, err)
-		_, err = db.UpdateTaskStatus(int64(task.ID), TASK_COMPLETED)
+		_, err = db.UpdateTaskStatus(task.ID, TASK_COMPLETED)
 		require.NoError(t, err)
 
 		// Try to retrieve with "developer" (lowercase)
@@ -1874,7 +1712,7 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 		}
 		err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
 		require.NoError(t, err)
-		_, err = db.UpdateTaskStatus(int64(task.ID), TASK_COMPLETED)
+		_, err = db.UpdateTaskStatus(task.ID, TASK_COMPLETED)
 		require.NoError(t, err)
 
 		// Retrieve completed tasks and verify relationships are loaded
@@ -1885,9 +1723,9 @@ func TestGetCompletedTasksByRole(t *testing.T) {
 		retrievedTask := tasks[0]
 		assert.Equal(t, task.ID, retrievedTask.ID)
 		assert.Equal(t, author.Username, retrievedTask.Author.Username)
-		assert.Equal(t, assignee.Username, retrievedTask.AssignedUser.Username)
-		assert.True(t, retrievedTask.AssignedUserID.Valid)
-		assert.Equal(t, int64(assignee.ID), retrievedTask.AssignedUserID.Int64)
+		assert.Len(t, retrievedTask.AssignedUsers, 1)
+		assert.Equal(t, assignee.Username, retrievedTask.AssignedUsers[0].Username)
+		assert.Equal(t, assignee.ID, retrievedTask.AssignedUsers[0].ID)
 		assert.Equal(t, TASK_COMPLETED, retrievedTask.Status)
 	})
 }
