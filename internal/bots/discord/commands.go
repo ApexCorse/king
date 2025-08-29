@@ -172,7 +172,9 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 
 	fmt.Printf("[assigned-tasks] Command executed by user %s\n", i.Member.User.Username)
 	userDiscordID := i.Member.User.ID
-	tasks, err := b.db.GetAssignedTasksByUserDiscordID(userDiscordID)
+	user, err := b.db.GetUserByDiscordID(userDiscordID, &db.UserRetrieveOptions{
+		WithAssignedTasks: true,
+	})
 	if err != nil {
 		fmt.Printf("[assigned-tasks] Failed to get assigned tasks: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -184,6 +186,7 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 		})
 		return
 	}
+	tasks := user.AssignedTasks
 
 	if len(tasks) == 0 {
 		respContent := "🎉 You have no tasks assigned to you at the moment."
@@ -253,7 +256,7 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 	}
 
 	taskID := options[0].IntValue()
-	task, err := b.db.GetTaskByID(taskID)
+	task, err := b.db.GetTaskByID(uint(taskID))
 	if err != nil {
 		fmt.Printf("[get-task] Failed to get task: %v\n", err)
 		respContent := fmt.Sprintf("❌ **Task not found!**\n\nTask with ID `%d` doesn't exist or has been deleted. Please check the ID and try again.", taskID)
@@ -274,8 +277,11 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 	if task.Role != "" {
 		respContent += fmt.Sprintf("\n*Role*: %s", task.Role)
 	}
-	if task.AssignedUserID.Valid {
-		respContent += fmt.Sprintf("\n*Assigned to*: <@%s>", task.AssignedUser.DiscordID)
+	if len(task.AssignedUsers) > 0 {
+		respContent += "\n*Assigned to:*\n"
+		for _, user := range task.AssignedUsers {
+			respContent += fmt.Sprintf("  - <@%s>\n", user.DiscordID)
+		}
 	}
 	respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
 	respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
@@ -361,8 +367,11 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
 		}
 		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
-		if task.AssignedUserID.Valid {
-			respContent += fmt.Sprintf("\n*Assigned to*: <@%s>", task.AssignedUser.DiscordID)
+		if len(task.AssignedUsers) > 0 {
+			respContent += "\n*Assigned to:*\n"
+			for _, user := range task.AssignedUsers {
+				respContent += fmt.Sprintf("  - <@%s>\n", user.DiscordID)
+			}
 		}
 		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
 		respContent += "\n"
@@ -511,7 +520,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	taskID := options[0].IntValue()
 	userDiscordID := options[1].UserValue(s).ID
 
-	user, err := b.db.GetUserByDiscordID(userDiscordID)
+	user, err := b.db.GetUserByDiscordID(userDiscordID, nil)
 	if err != nil {
 		fmt.Printf("[assign-task] Failed to get user: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -524,7 +533,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		return
 	}
 
-	err = b.db.AssignTask(taskID, int64(user.ID))
+	err = b.db.AssignTask(uint(taskID), user.ID)
 	if err != nil {
 		fmt.Printf("[assign-task] Failed to assign task: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -596,7 +605,7 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 	taskID := options[0].IntValue()
 	status := options[1].StringValue()
 
-	task, err := b.db.UpdateTaskStatus(taskID, status)
+	task, err := b.db.UpdateTaskStatus(uint(taskID), status)
 	if err != nil {
 		fmt.Printf("[update-task-status] Failed to update task status: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -691,8 +700,11 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
 		}
 		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
-		if task.AssignedUserID.Valid {
-			respContent += fmt.Sprintf("\n*Assigned to*: <@%s>", task.AssignedUser.DiscordID)
+		if len(task.AssignedUsers) > 0 {
+			respContent += "\n*Assigned to:*\n"
+			for _, user := range task.AssignedUsers {
+				respContent += fmt.Sprintf("  - <@%s>\n", user.DiscordID)
+			}
 		}
 		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
 		respContent += "\n"
