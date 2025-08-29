@@ -20,7 +20,7 @@ func CreateTestDB() *gorm.DB {
 		panic(err)
 	}
 
-	db.AutoMigrate(&User{}, &Task{}, &TaskComment{}, &WebhookSubscriptions{})
+	db.AutoMigrate(&User{}, &Task{}, &TaskComment{}, &WebhookSubscription{}, &Repository{})
 
 	return db
 }

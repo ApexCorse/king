@@ -180,20 +180,46 @@ func (d *DB) UpdateTaskStatus(taskID int64, status string) (*Task, error) {
 	return task, nil
 }
 
-func (d *DB) GetWebhookSubscriptionsByRepository(repoName string) ([]WebhookSubscriptions, error) {
-	subscriptions := make([]WebhookSubscriptions, 0)
+func (d *DB) GetWebhookSubscriptionsByRepository(repoName string) ([]WebhookSubscription, error) {
+	subscriptions := make([]WebhookSubscription, 0)
 
-	if err := d.db.Where("repository = ?", repoName).Find(&subscriptions).Error; err != nil {
+	if err := d.db.Preload("Repository").
+		Joins("JOIN repositories ON repositories.id = webhook_subscriptions.repository_id").
+		Where("repositories.name = ?", repoName).
+		Find(&subscriptions).Error; err != nil {
 		return nil, err
 	}
 
 	return subscriptions, nil
 }
 
-func (d *DB) CreateWebhookSubscription(subscription *WebhookSubscriptions) error {
-	return d.db.Create(subscription).Error
+func (d *DB) CreateWebhookSubscription(repoName string, channelID string) (*WebhookSubscription, error) {
+	repo := &Repository{}
+
+	if err := d.db.Where("name = ?", repoName).First(repo).Error; err != nil {
+		return nil, fmt.Errorf("failed to get repository: %w", err)
+	}
+
+	subscription := &WebhookSubscription{
+		RepositoryID: repo.ID,
+		ChannelID:    channelID,
+	}
+
+	if err := d.db.Create(subscription).Error; err != nil {
+		return nil, fmt.Errorf("failed to create webhook subscription: %w", err)
+	}
+
+	return subscription, nil
 }
 
 func (d *DB) DeleteWebhookSubscription(repoName string, channelID string) error {
-	return d.db.Where("repository = ? AND channel_id = ?", repoName, channelID).Delete(&WebhookSubscriptions{}).Error
+	webhookSubscription := &WebhookSubscription{}
+
+	if err := d.db.Joins("JOIN repositories ON repositories.id = webhook_subscriptions.repository_id").
+		Where("repositories.name = ? AND webhook_subscriptions.channel_id = ?", repoName, channelID).
+		First(webhookSubscription).Error; err != nil {
+		return fmt.Errorf("failed to get webhook subscription: %w", err)
+	}
+
+	return d.db.Delete(webhookSubscription).Error
 }
