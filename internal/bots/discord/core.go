@@ -73,6 +73,7 @@ func (b *DiscordBot) initCommandHandlers() {
 	b.session.AddHandler(b.getCompletedTasksByRoleCommand)
 	b.session.AddHandler(b.subscribeChannelToPushWebhookCommand)
 	b.session.AddHandler(b.unsubscribeChannelFromPushWebhookCommand)
+	b.session.AddHandler(b.deleteTaskCommand)
 }
 
 func (b *DiscordBot) initCommands(githubRepoNames []string) error {
@@ -240,6 +241,18 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 					Description: "The repository to unsubscribe from",
 					Required:    true,
 					Choices:     repoOptions,
+				},
+			},
+		},
+		{
+			Name:        "delete-task",
+			Description: "Delete a task by its ID",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "id",
+					Description: "The ID of the task to delete",
+					Required:    true,
 				},
 			},
 		},

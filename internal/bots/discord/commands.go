@@ -720,6 +720,53 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 	})
 }
 
+func (b *DiscordBot) deleteTaskCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	if i.ApplicationCommandData().Name != "delete-task" {
+		return
+	}	
+
+	options := i.ApplicationCommandData().Options
+	if len(options) != 1 {
+		fmt.Printf("[delete-task] Invalid number of options provided: %d\n", len(options))
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "⚠️ **Invalid options**\n\nYou must provide exactly one option (task ID).",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	taskID := options[0].IntValue()
+	err := b.db.DeleteTask(uint(taskID))
+	if err != nil {
+		fmt.Printf("[delete-task] Failed to delete task: %v\n", err)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ **Failed to delete task**\n\nAn error occurred while deleting the task. Please try again or contact an administrator.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	respContent := fmt.Sprintf("✅ **Task deleted successfully!**\n\n*Task ID*: `%d`", taskID)
+	fmt.Printf("[delete-task] Task %d deleted successfully\n", taskID)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: respContent,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
+}
+
 func (b *DiscordBot) subscribeChannelToPushWebhookCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
