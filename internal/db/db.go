@@ -199,6 +199,10 @@ func (d *DB) UpdateTaskStatus(taskID uint, status string) (*Task, error) {
 	return task, nil
 }
 
+func (d *DB) DeleteTask(taskID uint) error {
+	return d.db.Model(&Task{}).Where("id = ?", taskID).Delete(&Task{}).Error
+}
+
 func (d *DB) GetWebhookSubscriptionsByRepository(repoName string) ([]WebhookSubscription, error) {
 	subscriptions := make([]WebhookSubscription, 0)
 

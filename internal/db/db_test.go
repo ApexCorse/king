@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestCreateUser(t *testing.T) {
@@ -2908,5 +2909,245 @@ func TestGetAllRepositories(t *testing.T) {
 			expectedName := fmt.Sprintf("repo-%03d", i)
 			assert.Equal(t, expectedName, retrievedRepos[i].Name)
 		}
+	})
+}
+
+func TestDeleteTask(t *testing.T) {
+	t.Run("successful task deletion", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create a user first
+		user := &User{
+			Username:  "TestUser",
+			DiscordID: "1234567890",
+		}
+		err := db.CreateUser(user)
+		require.NoError(t, err)
+
+		// Create a task
+		task := &Task{
+			Title:       "Test Task",
+			Description: "Test Description",
+			Role:        "Developer",
+			Status:      TASK_NOT_STARTED,
+			AuthorID:    user.ID,
+		}
+		err = gormDB.Create(task).Error
+		require.NoError(t, err)
+		require.NotZero(t, task.ID)
+
+		// Delete the task
+		err = db.DeleteTask(task.ID)
+		assert.NoError(t, err)
+
+		// Verify task was deleted
+		var deletedTask Task
+		err = gormDB.First(&deletedTask, task.ID).Error
+		assert.Error(t, err)
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+	})
+
+	t.Run("delete non-existent task", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Try to delete a task that doesn't exist
+		nonExistentID := uint(999)
+		err := db.DeleteTask(nonExistentID)
+		assert.NoError(t, err) // GORM doesn't return error for deleting non-existent records
+	})
+
+	t.Run("delete task with ID 0", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Try to delete a task with ID 0
+		err := db.DeleteTask(0)
+		assert.NoError(t, err) // GORM doesn't return error for deleting with ID 0
+	})
+
+	t.Run("delete task with assigned users", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "1111111111",
+		}
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "2222222222",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create a task
+		task := &Task{
+			Title:       "Task with Assignee",
+			Description: "Test Description",
+			Role:        "Developer",
+			Status:      TASK_NOT_STARTED,
+			AuthorID:    author.ID,
+		}
+		err = gormDB.Create(task).Error
+		require.NoError(t, err)
+
+		// Assign the task to a user
+		err = db.AssignTask(task.ID, assignee.ID)
+		require.NoError(t, err)
+
+		// Verify task has assigned user
+		retrievedTask, err := db.GetTaskByID(task.ID)
+		require.NoError(t, err)
+		require.Len(t, retrievedTask.AssignedUsers, 1)
+		assert.Equal(t, assignee.ID, retrievedTask.AssignedUsers[0].ID)
+
+		// Delete the task
+		err = db.DeleteTask(task.ID)
+		assert.NoError(t, err)
+
+		// Verify task was deleted
+		var deletedTask Task
+		err = gormDB.First(&deletedTask, task.ID).Error
+		assert.Error(t, err)
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+
+		// Verify assigned user still exists (cascade delete should not affect users)
+		var userExists User
+		err = gormDB.First(&userExists, assignee.ID).Error
+		assert.NoError(t, err)
+		assert.Equal(t, assignee.Username, userExists.Username)
+	})
+
+	t.Run("delete task with comments", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create a user
+		user := &User{
+			Username:  "TestUser",
+			DiscordID: "1234567890",
+		}
+		err := db.CreateUser(user)
+		require.NoError(t, err)
+
+		// Create a task
+		task := &Task{
+			Title:       "Task with Comments",
+			Description: "Test Description",
+			Role:        "Developer",
+			Status:      TASK_NOT_STARTED,
+			AuthorID:    user.ID,
+		}
+		err = gormDB.Create(task).Error
+		require.NoError(t, err)
+
+		// Add comments to the task
+		comment1 := &TaskComment{
+			Text:   "First comment",
+			TaskID: task.ID,
+		}
+		comment2 := &TaskComment{
+			Text:   "Second comment",
+			TaskID: task.ID,
+		}
+		err = gormDB.Create(comment1).Error
+		require.NoError(t, err)
+		err = gormDB.Create(comment2).Error
+		require.NoError(t, err)
+
+		// Verify comments exist
+		var comments []TaskComment
+		err = gormDB.Where("task_id = ?", task.ID).Find(&comments).Error
+		require.NoError(t, err)
+		require.Len(t, comments, 2)
+
+		// Delete the task
+		err = db.DeleteTask(task.ID)
+		assert.NoError(t, err)
+
+		// Verify task was deleted
+		var deletedTask Task
+		err = gormDB.First(&deletedTask, task.ID).Error
+		assert.Error(t, err)
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+
+		// Verify comments still exist (no cascade delete configured)
+		var remainingComments []TaskComment
+		err = gormDB.Where("task_id = ?", task.ID).Find(&remainingComments).Error
+		require.NoError(t, err)
+		assert.Len(t, remainingComments, 2) // Comments remain as orphaned records
+	})
+
+	t.Run("delete multiple tasks", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create a user
+		user := &User{
+			Username:  "TestUser",
+			DiscordID: "1234567890",
+		}
+		err := db.CreateUser(user)
+		require.NoError(t, err)
+
+		// Create multiple tasks
+		tasks := []*Task{
+			{
+				Title:       "Task 1",
+				Description: "Description 1",
+				Role:        "Developer",
+				Status:      TASK_NOT_STARTED,
+				AuthorID:    user.ID,
+			},
+			{
+				Title:       "Task 2",
+				Description: "Description 2",
+				Role:        "Designer",
+				Status:      TASK_IN_PROGRESS,
+				AuthorID:    user.ID,
+			},
+			{
+				Title:       "Task 3",
+				Description: "Description 3",
+				Role:        "Tester",
+				Status:      TASK_COMPLETED,
+				AuthorID:    user.ID,
+			},
+		}
+
+		for _, task := range tasks {
+			err = gormDB.Create(task).Error
+			require.NoError(t, err)
+		}
+
+		// Verify all tasks exist
+		var allTasks []Task
+		err = gormDB.Find(&allTasks).Error
+		require.NoError(t, err)
+		assert.Len(t, allTasks, 3)
+
+		// Delete the first task
+		err = db.DeleteTask(tasks[0].ID)
+		assert.NoError(t, err)
+
+		// Verify only the first task was deleted
+		var remainingTasks []Task
+		err = gormDB.Find(&remainingTasks).Error
+		require.NoError(t, err)
+		assert.Len(t, remainingTasks, 2)
+
+		// Verify the correct tasks remain
+		remainingIDs := make([]uint, len(remainingTasks))
+		for i, task := range remainingTasks {
+			remainingIDs[i] = task.ID
+		}
+		assert.Contains(t, remainingIDs, tasks[1].ID)
+		assert.Contains(t, remainingIDs, tasks[2].ID)
+		assert.NotContains(t, remainingIDs, tasks[0].ID)
 	})
 }
