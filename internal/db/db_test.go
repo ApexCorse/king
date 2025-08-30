@@ -109,6 +109,465 @@ func TestGetUserByDiscordID(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, user)
 	})
+
+	t.Run("retrieve user with assigned tasks", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create tasks assigned to the assignee
+		task1 := &Task{
+			Title:       "Task 1",
+			Description: "First assigned task",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
+		require.NoError(t, err)
+
+		task2 := &Task{
+			Title:       "Task 2",
+			Description: "Second assigned task",
+			Role:        "designer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task2, "author123", "assignee456")
+		require.NoError(t, err)
+
+		// Retrieve user with assigned tasks
+		retrievedUser, err := db.GetUserByDiscordID("assignee456", &UserRetrieveOptions{
+			WithAssignedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedUser)
+		assert.Equal(t, assignee.ID, retrievedUser.ID)
+		assert.Equal(t, assignee.Username, retrievedUser.Username)
+		assert.Len(t, retrievedUser.AssignedTasks, 2)
+
+		// Verify assigned tasks are loaded with their authors
+		taskIDs := make(map[uint]bool)
+		for _, task := range retrievedUser.AssignedTasks {
+			taskIDs[task.ID] = true
+			assert.Equal(t, author.ID, task.AuthorID)
+			assert.Equal(t, author.Username, task.Author.Username)
+			assert.NotEmpty(t, task.Title)
+			assert.NotEmpty(t, task.Description)
+		}
+		assert.True(t, taskIDs[task1.ID])
+		assert.True(t, taskIDs[task2.ID])
+	})
+
+	t.Run("retrieve user with created tasks", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create tasks created by the author
+		task1 := &Task{
+			Title:       "Created Task 1",
+			Description: "First created task",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
+		require.NoError(t, err)
+
+		task2 := &Task{
+			Title:       "Created Task 2",
+			Description: "Second created task",
+			Role:        "designer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task2, "author123", "")
+		require.NoError(t, err)
+
+		// Retrieve user with created tasks
+		retrievedUser, err := db.GetUserByDiscordID("author123", &UserRetrieveOptions{
+			WithCreatedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedUser)
+		assert.Equal(t, author.ID, retrievedUser.ID)
+		assert.Equal(t, author.Username, retrievedUser.Username)
+		assert.Len(t, retrievedUser.CreatedTasks, 2)
+
+		// Verify created tasks are loaded with their authors (should be the same user)
+		taskIDs := make(map[uint]bool)
+		for _, task := range retrievedUser.CreatedTasks {
+			taskIDs[task.ID] = true
+			assert.Equal(t, author.ID, task.AuthorID)
+			assert.Equal(t, author.Username, task.Author.Username)
+			assert.NotEmpty(t, task.Title)
+			assert.NotEmpty(t, task.Description)
+		}
+		assert.True(t, taskIDs[task1.ID])
+		assert.True(t, taskIDs[task2.ID])
+	})
+
+	t.Run("retrieve user with both assigned and created tasks", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create tasks where author creates and assignee is assigned
+		task1 := &Task{
+			Title:       "Shared Task 1",
+			Description: "Task created by author, assigned to assignee",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
+		require.NoError(t, err)
+
+		task2 := &Task{
+			Title:       "Author Only Task",
+			Description: "Task created by author, no assignee",
+			Role:        "designer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task2, "author123", "")
+		require.NoError(t, err)
+
+		// Retrieve author with both created and assigned tasks
+		retrievedAuthor, err := db.GetUserByDiscordID("author123", &UserRetrieveOptions{
+			WithCreatedTasks:  true,
+			WithAssignedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedAuthor)
+		assert.Equal(t, author.ID, retrievedAuthor.ID)
+		assert.Len(t, retrievedAuthor.CreatedTasks, 2)  // Should have 2 created tasks
+		assert.Len(t, retrievedAuthor.AssignedTasks, 0) // Should have 0 assigned tasks
+
+		// Retrieve assignee with both created and assigned tasks
+		retrievedAssignee, err := db.GetUserByDiscordID("assignee456", &UserRetrieveOptions{
+			WithCreatedTasks:  true,
+			WithAssignedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedAssignee)
+		assert.Equal(t, assignee.ID, retrievedAssignee.ID)
+		assert.Len(t, retrievedAssignee.CreatedTasks, 0)  // Should have 0 created tasks
+		assert.Len(t, retrievedAssignee.AssignedTasks, 1) // Should have 1 assigned task
+
+		// Verify the shared task appears in both relationships
+		assert.Equal(t, task1.ID, retrievedAssignee.AssignedTasks[0].ID)
+		assert.Equal(t, task1.ID, retrievedAuthor.CreatedTasks[0].ID)
+	})
+
+	t.Run("retrieve user with no tasks", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create user with no tasks
+		user := &User{
+			Username:  "NoTasksUser",
+			DiscordID: "notasks123",
+		}
+		err := db.CreateUser(user)
+		require.NoError(t, err)
+
+		// Retrieve user with assigned tasks option
+		retrievedUser, err := db.GetUserByDiscordID("notasks123", &UserRetrieveOptions{
+			WithAssignedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedUser)
+		assert.Equal(t, user.ID, retrievedUser.ID)
+		assert.Empty(t, retrievedUser.AssignedTasks)
+
+		// Retrieve user with created tasks option
+		retrievedUser, err = db.GetUserByDiscordID("notasks123", &UserRetrieveOptions{
+			WithCreatedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedUser)
+		assert.Equal(t, user.ID, retrievedUser.ID)
+		assert.Empty(t, retrievedUser.CreatedTasks)
+
+		// Retrieve user with both options
+		retrievedUser, err = db.GetUserByDiscordID("notasks123", &UserRetrieveOptions{
+			WithAssignedTasks: true,
+			WithCreatedTasks:  true,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedUser)
+		assert.Equal(t, user.ID, retrievedUser.ID)
+		assert.Empty(t, retrievedUser.AssignedTasks)
+		assert.Empty(t, retrievedUser.CreatedTasks)
+	})
+
+	t.Run("retrieve user with complex task relationships", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create multiple users
+		user1 := &User{
+			Username:  "User1",
+			DiscordID: "user1",
+		}
+		err := db.CreateUser(user1)
+		require.NoError(t, err)
+
+		user2 := &User{
+			Username:  "User2",
+			DiscordID: "user2",
+		}
+		err = db.CreateUser(user2)
+		require.NoError(t, err)
+
+		user3 := &User{
+			Username:  "User3",
+			DiscordID: "user3",
+		}
+		err = db.CreateUser(user3)
+		require.NoError(t, err)
+
+		// Create complex task relationships:
+		// - User1 creates Task1, assigned to User2
+		// - User2 creates Task2, assigned to User1
+		// - User1 creates Task3, assigned to User3
+		// - User3 creates Task4, assigned to User1
+
+		task1 := &Task{
+			Title:       "Task 1",
+			Description: "Created by User1, assigned to User2",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task1, "user1", "user2")
+		require.NoError(t, err)
+
+		task2 := &Task{
+			Title:       "Task 2",
+			Description: "Created by User2, assigned to User1",
+			Role:        "designer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task2, "user2", "user1")
+		require.NoError(t, err)
+
+		task3 := &Task{
+			Title:       "Task 3",
+			Description: "Created by User1, assigned to User3",
+			Role:        "qa",
+		}
+		err = db.CreateTaskWithUserDiscordID(task3, "user1", "user3")
+		require.NoError(t, err)
+
+		task4 := &Task{
+			Title:       "Task 4",
+			Description: "Created by User3, assigned to User1",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task4, "user3", "user1")
+		require.NoError(t, err)
+
+		// Test User1: should have 2 created tasks and 2 assigned tasks
+		retrievedUser1, err := db.GetUserByDiscordID("user1", &UserRetrieveOptions{
+			WithCreatedTasks:  true,
+			WithAssignedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.Len(t, retrievedUser1.CreatedTasks, 2)  // Task1, Task3
+		assert.Len(t, retrievedUser1.AssignedTasks, 2) // Task2, Task4
+
+		// Verify created tasks
+		createdTaskIDs := make(map[uint]bool)
+		for _, task := range retrievedUser1.CreatedTasks {
+			createdTaskIDs[task.ID] = true
+		}
+		assert.True(t, createdTaskIDs[task1.ID])
+		assert.True(t, createdTaskIDs[task3.ID])
+
+		// Verify assigned tasks
+		assignedTaskIDs := make(map[uint]bool)
+		for _, task := range retrievedUser1.AssignedTasks {
+			assignedTaskIDs[task.ID] = true
+		}
+		assert.True(t, assignedTaskIDs[task2.ID])
+		assert.True(t, assignedTaskIDs[task4.ID])
+
+		// Test User2: should have 1 created task and 1 assigned task
+		retrievedUser2, err := db.GetUserByDiscordID("user2", &UserRetrieveOptions{
+			WithCreatedTasks:  true,
+			WithAssignedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.Len(t, retrievedUser2.CreatedTasks, 1)  // Task2
+		assert.Len(t, retrievedUser2.AssignedTasks, 1) // Task1
+
+		// Test User3: should have 1 created task and 1 assigned task
+		retrievedUser3, err := db.GetUserByDiscordID("user3", &UserRetrieveOptions{
+			WithCreatedTasks:  true,
+			WithAssignedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.Len(t, retrievedUser3.CreatedTasks, 1)  // Task4
+		assert.Len(t, retrievedUser3.AssignedTasks, 1) // Task3
+	})
+
+	t.Run("retrieve user with tasks having different statuses", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create tasks with different statuses
+		task1 := &Task{
+			Title:       "Not Started Task",
+			Description: "Task with default status",
+			Role:        "developer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task1, "author123", "assignee456")
+		require.NoError(t, err)
+
+		task2 := &Task{
+			Title:       "In Progress Task",
+			Description: "Task in progress",
+			Role:        "designer",
+		}
+		err = db.CreateTaskWithUserDiscordID(task2, "author123", "assignee456")
+		require.NoError(t, err)
+		_, err = db.UpdateTaskStatus(task2.ID, TASK_IN_PROGRESS)
+		require.NoError(t, err)
+
+		task3 := &Task{
+			Title:       "Completed Task",
+			Description: "Completed task",
+			Role:        "qa",
+		}
+		err = db.CreateTaskWithUserDiscordID(task3, "author123", "assignee456")
+		require.NoError(t, err)
+		_, err = db.UpdateTaskStatus(task3.ID, TASK_COMPLETED)
+		require.NoError(t, err)
+
+		// Retrieve assignee with assigned tasks
+		retrievedUser, err := db.GetUserByDiscordID("assignee456", &UserRetrieveOptions{
+			WithAssignedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.Len(t, retrievedUser.AssignedTasks, 3)
+
+		// Verify all tasks are loaded regardless of status
+		taskIDs := make(map[uint]bool)
+		statuses := make(map[string]bool)
+		for _, task := range retrievedUser.AssignedTasks {
+			taskIDs[task.ID] = true
+			statuses[task.Status] = true
+		}
+		assert.True(t, taskIDs[task1.ID])
+		assert.True(t, taskIDs[task2.ID])
+		assert.True(t, taskIDs[task3.ID])
+		assert.True(t, statuses[TASK_NOT_STARTED])
+		assert.True(t, statuses[TASK_IN_PROGRESS])
+		assert.True(t, statuses[TASK_COMPLETED])
+	})
+
+	t.Run("retrieve user with tasks having different roles", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create users
+		author := &User{
+			Username:  "Author",
+			DiscordID: "author123",
+		}
+		err := db.CreateUser(author)
+		require.NoError(t, err)
+
+		assignee := &User{
+			Username:  "Assignee",
+			DiscordID: "assignee456",
+		}
+		err = db.CreateUser(assignee)
+		require.NoError(t, err)
+
+		// Create tasks with different roles
+		roles := []string{"developer", "designer", "qa", "devops", "product"}
+		tasks := make([]*Task, len(roles))
+
+		for i, role := range roles {
+			task := &Task{
+				Title:       fmt.Sprintf("Task %d", i+1),
+				Description: fmt.Sprintf("Task with role %s", role),
+				Role:        role,
+			}
+			err = db.CreateTaskWithUserDiscordID(task, "author123", "assignee456")
+			require.NoError(t, err)
+			tasks[i] = task
+		}
+
+		// Retrieve assignee with assigned tasks
+		retrievedUser, err := db.GetUserByDiscordID("assignee456", &UserRetrieveOptions{
+			WithAssignedTasks: true,
+		})
+		assert.NoError(t, err)
+		assert.Len(t, retrievedUser.AssignedTasks, len(roles))
+
+		// Verify all tasks are loaded with correct roles
+		taskIDs := make(map[uint]bool)
+		loadedRoles := make(map[string]bool)
+		for _, task := range retrievedUser.AssignedTasks {
+			taskIDs[task.ID] = true
+			loadedRoles[task.Role] = true
+		}
+
+		for _, task := range tasks {
+			assert.True(t, taskIDs[task.ID])
+		}
+
+		for _, role := range roles {
+			assert.True(t, loadedRoles[role])
+		}
+	})
 }
 
 func TestCreateTaskWithUserDiscordID(t *testing.T) {
