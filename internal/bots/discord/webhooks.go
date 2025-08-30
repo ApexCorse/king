@@ -32,7 +32,7 @@ func (b *DiscordBot) onPushWebhook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	payload := &PushEvent{}
 	if err := json.Unmarshal(body, payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
