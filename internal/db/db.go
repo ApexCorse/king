@@ -44,7 +44,9 @@ func (d *DB) GetUserByDiscordID(discordID string, options *UserRetrieveOptions) 
 		}
 	}
 
-	if err := query.Where("discord_id = ?", discordID).First(user).Error; err != nil {
+	if err := query.
+		Where("discord_id = ?", discordID).
+		First(user).Error; err != nil {
 		return nil, err
 	}
 
