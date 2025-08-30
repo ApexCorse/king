@@ -6,6 +6,7 @@ import (
 
 	"github.com/Formula-SAE/discord/internal/db"
 	"github.com/bwmarrin/discordgo"
+	"gorm.io/gorm"
 )
 
 func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -171,12 +172,11 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 	}
 
 	fmt.Printf("[assigned-tasks] Command executed by user %s\n", i.Member.User.Username)
+
 	userDiscordID := i.Member.User.ID
-	user, err := b.db.GetUserByDiscordID(userDiscordID, &db.UserRetrieveOptions{
-		WithAssignedTasks: true,
-	})
+	user, err := b.getOrCreateUser(userDiscordID, i.Member.User.Username)
 	if err != nil {
-		fmt.Printf("[assigned-tasks] Failed to get assigned tasks: %v\n", err)
+		fmt.Printf("[assigned-tasks] Failed to get or create user: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -520,7 +520,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	taskID := options[0].IntValue()
 	userDiscordID := options[1].UserValue(s).ID
 
-	user, err := b.db.GetUserByDiscordID(userDiscordID, nil)
+	user, err := b.getOrCreateUser(userDiscordID, options[1].UserValue(s).Username)
 	if err != nil {
 		fmt.Printf("[assign-task] Failed to get user: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -852,4 +852,32 @@ func getStatusIcon(status string) string {
 	default:
 		return "❓" // Question mark for unknown status
 	}
+}
+
+// getOrCreateUser retrieves a user by Discord ID or creates a new one if not found
+func (b *DiscordBot) getOrCreateUser(discordID, username string) (*db.User, error) {
+	user, err := b.db.GetUserByDiscordID(discordID, &db.UserRetrieveOptions{
+		WithAssignedTasks: true,
+	})
+
+	if err == nil {
+		return user, nil
+	}
+
+	if err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+
+	// User not found, create new one
+	user = &db.User{
+		Username:  username,
+		DiscordID: discordID,
+	}
+
+	err = b.db.CreateUser(user)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
