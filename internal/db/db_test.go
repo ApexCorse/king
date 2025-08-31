@@ -2456,6 +2456,27 @@ func TestCreateWebhookSubscription(t *testing.T) {
 		assert.Equal(t, longChannel, dbSubscription.ChannelID)
 		assert.Equal(t, repo.ID, dbSubscription.RepositoryID)
 	})
+
+	t.Run("create duplicate subscription should fail", func(t *testing.T) {
+		gormDB := CreateTestDB()
+		db := NewDB(gormDB)
+
+		// Create repository first
+		repo := &Repository{Name: "test-repo"}
+		err := gormDB.Create(repo).Error
+		require.NoError(t, err)
+
+		// Create first subscription
+		subscription1, err := db.CreateWebhookSubscription("test-repo", "channel123")
+		assert.NoError(t, err)
+		assert.NotZero(t, subscription1.ID)
+
+		// Try to create duplicate subscription with same repository and channel
+		subscription2, err := db.CreateWebhookSubscription("test-repo", "channel123")
+		assert.Error(t, err)
+		assert.Nil(t, subscription2)
+		assert.Contains(t, err.Error(), "UNIQUE constraint failed")
+	})
 }
 
 func TestDeleteWebhookSubscription(t *testing.T) {

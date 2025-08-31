@@ -229,7 +229,7 @@ func (d *DB) CreateWebhookSubscription(repoName string, channelID string) (*Webh
 	}
 
 	if err := d.db.Create(subscription).Error; err != nil {
-		return nil, fmt.Errorf("failed to create webhook subscription: %w", err)
+		return nil, err
 	}
 
 	return subscription, nil

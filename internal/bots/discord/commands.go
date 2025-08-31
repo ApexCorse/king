@@ -2,6 +2,7 @@ package discord
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Formula-SAE/discord/internal/db"
@@ -885,6 +886,17 @@ func (b *DiscordBot) subscribeChannelToPushWebhookCommand(s *discordgo.Session, 
 
 	_, err := b.db.CreateWebhookSubscription(repo, i.ChannelID)
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			fmt.Printf("[subscribe-channel-to-push] Channel %s already subscribed to push webhook for repository %s\n", i.ChannelID, repo)
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "✅ **Channel already subscribed to push webhook**\n\nThe channel is already subscribed to the push webhook for the repository.",
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
 		fmt.Printf("[subscribe-channel-to-push] Failed to create webhook subscription: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
