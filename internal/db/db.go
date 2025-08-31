@@ -244,7 +244,7 @@ func (d *DB) DeleteWebhookSubscription(repoName string, channelID string) error 
 		return fmt.Errorf("failed to get webhook subscription: %w", err)
 	}
 
-	return d.db.Delete(webhookSubscription).Error
+	return d.db.Unscoped().Delete(webhookSubscription).Error
 }
 
 func (d *DB) CreateRepository(repo *Repository) error {
