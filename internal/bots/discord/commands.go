@@ -148,6 +148,21 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
+
+	if assignee != nil {
+		message := fmt.Sprintf("👋 Hi <@%s>! You have been assigned a new task:\n\n**%s**", assigneeId, task.Title)
+
+		if task.Description != "" {
+			message += fmt.Sprintf("\n%s", task.Description)
+		}
+
+		message += fmt.Sprintf("\n\n🔗 *Task ID*: `%d`\n\nGood luck! 🚀", task.ID)
+
+		err = b.sendPrivateMessage(assigneeId, message)
+		if err != nil {
+			fmt.Printf("[create-task] Failed to send private message to assignee: %v\n", err)
+		}
+	}
 }
 
 func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -554,6 +569,21 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
+
+	task, err := b.db.GetTaskByID(uint(taskID))
+	if err != nil {
+		fmt.Printf("[assign-task] Failed to get task: %v\n", err)
+		return
+	}
+	message := fmt.Sprintf("👋 Hi <@%s>! You have been assigned a new task:\n\n**%s**", userDiscordID, task.Title)
+	if task.Description != "" {
+		message += fmt.Sprintf("\n%s", task.Description)
+	}
+	message += fmt.Sprintf("\n\n🔗 *Task ID*: `%d`", task.ID)
+	err = b.sendPrivateMessage(userDiscordID, message)
+	if err != nil {
+		fmt.Printf("[create-task] Failed to send private message to assignee: %v\n", err)
+	}
 }
 
 func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -627,6 +657,24 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
+
+	allUsers := []db.User{task.Author}
+	allUsers = append(allUsers, task.AssignedUsers...)
+	// Notify all assigned users about the status update
+	for _, user := range allUsers {
+		message := fmt.Sprintf(
+			"📢 **Task Status Update**\n\nYour task has been updated:\n\n**%s**\n\n🔗 *Task ID*: `%d`\n📊 *New Status*: %s %s\n\nUpdated by: <@%s>",
+			task.Title,
+			task.ID,
+			getStatusIcon(status),
+			status,
+			i.Member.User.ID)
+
+		err = b.sendPrivateMessage(user.DiscordID, message)
+		if err != nil {
+			fmt.Printf("[update-task-status] Failed to send notification to assignee %s: %v\n", user.DiscordID, err)
+		}
+	}
 }
 
 func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -727,7 +775,7 @@ func (b *DiscordBot) deleteTaskCommand(s *discordgo.Session, i *discordgo.Intera
 
 	if i.ApplicationCommandData().Name != "delete-task" {
 		return
-	}	
+	}
 
 	options := i.ApplicationCommandData().Options
 	if len(options) != 1 {
@@ -743,7 +791,22 @@ func (b *DiscordBot) deleteTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	taskID := options[0].IntValue()
-	err := b.db.DeleteTask(uint(taskID))
+
+	// Get task details before deletion for notifications
+	task, err := b.db.GetTaskByID(uint(taskID))
+	if err != nil {
+		fmt.Printf("[delete-task] Failed to get task details: %v\n", err)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ **Failed to delete task**\n\nAn error occurred while retrieving task details. Please try again or contact an administrator.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	err = b.db.DeleteTask(uint(taskID))
 	if err != nil {
 		fmt.Printf("[delete-task] Failed to delete task: %v\n", err)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -765,6 +828,23 @@ func (b *DiscordBot) deleteTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
+
+	// Notify all users involved about the task deletion
+	allUsers := []db.User{task.Author}
+	allUsers = append(allUsers, task.AssignedUsers...)
+
+	for _, user := range allUsers {
+		message := fmt.Sprintf(
+			"🗑️ **Task Deleted**\n\nA task you were involved with has been deleted:\n\n**%s**\n\n🔗 *Task ID*: `%d`\n\nDeleted by: <@%s>",
+			task.Title,
+			task.ID,
+			i.Member.User.ID)
+
+		err = b.sendPrivateMessage(user.DiscordID, message)
+		if err != nil {
+			fmt.Printf("[delete-task] Failed to send notification to user %s: %v\n", user.DiscordID, err)
+		}
+	}
 }
 
 func (b *DiscordBot) subscribeChannelToPushWebhookCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
