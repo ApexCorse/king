@@ -822,7 +822,6 @@ func (b *DiscordBot) subscribeChannelToPushWebhookCommand(s *discordgo.Session, 
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
-			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -882,7 +881,6 @@ func (b *DiscordBot) unsubscribeChannelFromPushWebhookCommand(s *discordgo.Sessi
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
-			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
