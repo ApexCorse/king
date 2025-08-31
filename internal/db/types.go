@@ -47,9 +47,8 @@ type TaskComment struct {
 type WebhookSubscription struct {
 	gorm.Model
 
-	ChannelID string
-
-	RepositoryID uint
+	ChannelID    string `gorm:"uniqueIndex:idx_channel_id_repository_id"`
+	RepositoryID uint   `gorm:"uniqueIndex:idx_channel_id_repository_id"`
 	Repository   Repository
 }
 
