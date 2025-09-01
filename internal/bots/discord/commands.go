@@ -10,12 +10,27 @@ import (
 	"gorm.io/gorm"
 )
 
+// Command name constants
+const (
+	CommandCreateTask                    = "create-task"
+	CommandAssignedTasks                 = "assigned-tasks"
+	CommandGetTask                       = "get-task"
+	CommandGetTasksByRole                = "get-tasks-by-role"
+	CommandUnassignedTasksByRole         = "unassigned-tasks-by-role"
+	CommandAssignTask                    = "assign-task"
+	CommandUpdateTaskStatus              = "update-task-status"
+	CommandCompletedTasksByRole          = "completed-tasks-by-role"
+	CommandDeleteTask                    = "delete-task"
+	CommandSubscribeChannelToPush        = "subscribe-channel-to-push"
+	CommandUnsubscribeChannelFromPush    = "unsubscribe-channel-from-push"
+)
+
 func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "create-task" {
+	if i.ApplicationCommandData().Name != CommandCreateTask {
 		return
 	}
 
@@ -171,7 +186,7 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "assigned-tasks" {
+	if i.ApplicationCommandData().Name != CommandAssignedTasks {
 		return
 	}
 
@@ -243,7 +258,7 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "get-task" {
+	if i.ApplicationCommandData().Name != CommandGetTask {
 		return
 	}
 
@@ -317,7 +332,7 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "get-tasks-by-role" {
+	if i.ApplicationCommandData().Name != CommandGetTasksByRole {
 		return
 	}
 
@@ -408,7 +423,7 @@ func (b *DiscordBot) getUnassignedTasksByRoleCommand(s *discordgo.Session, i *di
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "unassigned-tasks-by-role" {
+	if i.ApplicationCommandData().Name != CommandUnassignedTasksByRole {
 		return
 	}
 
@@ -493,7 +508,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "assign-task" {
+	if i.ApplicationCommandData().Name != CommandAssignTask {
 		return
 	}
 
@@ -592,7 +607,7 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "update-task-status" {
+	if i.ApplicationCommandData().Name != CommandUpdateTaskStatus {
 		return
 	}
 
@@ -683,7 +698,7 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "completed-tasks-by-role" {
+	if i.ApplicationCommandData().Name != CommandCompletedTasksByRole {
 		return
 	}
 
@@ -774,7 +789,7 @@ func (b *DiscordBot) deleteTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "delete-task" {
+	if i.ApplicationCommandData().Name != CommandDeleteTask {
 		return
 	}
 
@@ -853,7 +868,7 @@ func (b *DiscordBot) subscribeChannelToPushWebhookCommand(s *discordgo.Session, 
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "subscribe-channel-to-push" {
+	if i.ApplicationCommandData().Name != CommandSubscribeChannelToPush {
 		return
 	}
 
@@ -924,7 +939,7 @@ func (b *DiscordBot) unsubscribeChannelFromPushWebhookCommand(s *discordgo.Sessi
 		return
 	}
 
-	if i.ApplicationCommandData().Name != "unsubscribe-channel-from-push" {
+	if i.ApplicationCommandData().Name != CommandUnsubscribeChannelFromPush {
 		return
 	}
 
