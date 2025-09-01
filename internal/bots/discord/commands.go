@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/Formula-SAE/discord/internal/db"
+	"github.com/Formula-SAE/discord/internal/utils"
 	"github.com/bwmarrin/discordgo"
 	"gorm.io/gorm"
 )
@@ -41,7 +42,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ **Missing title**\n\nYou must provide at least a title for the task.",
+				Content: fmt.Sprintf("⚠️ %s\n\nYou must provide at least a title for the task.", utils.Bold("Missing title")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -52,7 +53,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "🚫 **Access denied**\n\nYou must be a member of a server to use this command.",
+				Content: fmt.Sprintf("🚫 %s\n\nYou must be a member of a server to use this command.", utils.Bold("Access denied")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -75,7 +76,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ **Missing title**\n\nYou must provide a title for the task.",
+				Content: fmt.Sprintf("⚠️ %s\n\nYou must provide a title for the task.", utils.Bold("Missing title")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -86,7 +87,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 			title.StringValue(),
 		)
 		task.Title = title.StringValue()
-		respContent = fmt.Sprintf("✅ **Task created successfully!**\n\n*Title*: %s", title.StringValue())
+		respContent = fmt.Sprintf("✅ %s\n\n%s: %s", utils.Bold("Task created successfully!"), utils.Italic("Title"), title.StringValue())
 	}
 
 	description := optionMap["description"]
@@ -97,19 +98,19 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	if description != nil {
 		fmt.Printf(", description: %s", description.StringValue())
 		task.Description = description.StringValue()
-		respContent += fmt.Sprintf("\n*Description*: %s", description.StringValue())
+		respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Description"), description.StringValue())
 	}
 
 	if assignee != nil {
 		fmt.Printf(", assignee: %s", assignee.UserValue(s).ID)
 		assigneeId = assignee.UserValue(s).ID
-		respContent += fmt.Sprintf("\n*Assignee*: <@%s>", assigneeId)
+		respContent += fmt.Sprintf("\n%s: <@%s>", utils.Italic("Assignee"), assigneeId)
 	}
 
 	if role != nil {
 		fmt.Printf(", role: %s", role.RoleValue(s, b.guildID).Name)
 		task.Role = role.RoleValue(s, b.guildID).Name
-		respContent += fmt.Sprintf("\n*Role*: %s", role.RoleValue(s, b.guildID).Name)
+		respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Role"), role.RoleValue(s, b.guildID).Name)
 	}
 	fmt.Printf("\n")
 
@@ -148,7 +149,7 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ **Failed to create task**\n\nAn error occurred while creating the task. Please try again or contact an administrator.",
+				Content: fmt.Sprintf("❌ %s\n\nAn error occurred while creating the task. Please try again or contact an administrator.", utils.Bold("Failed to create task")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -156,8 +157,8 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	fmt.Printf("[create-task] Task created successfully with ID: %d\n", task.ID)
-	respContent += fmt.Sprintf("\n*Task ID*: `%d`", task.ID)
-	respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
+	respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Task ID"), utils.InlineCode(fmt.Sprintf("%d", task.ID)))
+	respContent += fmt.Sprintf("\n%s: %s %s", utils.Italic("Status"), getStatusIcon(task.Status), task.Status)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -167,13 +168,13 @@ func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.Intera
 	})
 
 	if assignee != nil {
-		message := fmt.Sprintf("👋 Hi <@%s>! You have been assigned a new task:\n\n**%s**", assigneeId, task.Title)
+		message := fmt.Sprintf("👋 Hi <@%s>! You have been assigned a new task:\n\n%s", assigneeId, utils.Bold(task.Title))
 
 		if task.Description != "" {
 			message += fmt.Sprintf("\n%s", task.Description)
 		}
 
-		message += fmt.Sprintf("\n\n🔗 *Task ID*: `%d`\n\nGood luck! 🚀", task.ID)
+		message += fmt.Sprintf("\n\n🔗 %s: %s\n\nGood luck! 🚀", utils.Italic("Task ID"), utils.InlineCode(fmt.Sprintf("%d", task.ID)))
 
 		err = b.sendPrivateMessage(assigneeId, message)
 		if err != nil {
@@ -212,7 +213,7 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ **Failed to retrieve tasks**\n\nAn error occurred while fetching your assigned tasks. Please try again or contact an administrator.",
+				Content: fmt.Sprintf("❌ %s\n\nAn error occurred while fetching your assigned tasks. Please try again or contact an administrator.", utils.Bold("Failed to retrieve tasks")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -233,15 +234,15 @@ func (b *DiscordBot) getAssignedTasksCommand(s *discordgo.Session, i *discordgo.
 		return
 	}
 
-	respContent := "📋 **Your assigned tasks:**\n"
+	respContent := fmt.Sprintf("📋 %s\n", utils.Bold("Your assigned tasks:"))
 	for _, task := range tasks {
-		respContent += fmt.Sprintf("\n*ID*: %d", task.ID)
-		respContent += fmt.Sprintf("\n*Title*: %s", task.Title)
+		respContent += fmt.Sprintf("\n%s: %d", utils.Italic("ID"), task.ID)
+		respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Title"), task.Title)
 		if task.Description != "" {
-			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
+			respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Description"), task.Description)
 		}
-		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
-		respContent += fmt.Sprintf("\n*Status*: %s %s\n", getStatusIcon(task.Status), task.Status)
+		respContent += fmt.Sprintf("\n%s: <@%s>", utils.Italic("Author"), task.Author.DiscordID)
+		respContent += fmt.Sprintf("\n%s: %s %s\n", utils.Italic("Status"), getStatusIcon(task.Status), task.Status)
 	}
 
 	fmt.Printf("[assigned-tasks] Retrieved %d tasks for user %s\n", len(tasks), userDiscordID)
@@ -269,7 +270,7 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ **Invalid options**\n\nYou must provide exactly one option (task ID).",
+				Content: fmt.Sprintf("⚠️ %s\n\nYou must provide exactly one option (task ID).", utils.Bold("Invalid options")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -281,7 +282,7 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ **Invalid ID format**\n\nYou must provide a valid integer ID for the task.",
+				Content: fmt.Sprintf("⚠️ %s\n\nYou must provide a valid integer ID for the task.", utils.Bold("Invalid ID format")),
 			},
 		})
 		return
@@ -291,7 +292,7 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 	task, err := b.db.GetTaskByID(uint(taskID))
 	if err != nil {
 		fmt.Printf("[get-task] Failed to get task: %v\n", err)
-		respContent := fmt.Sprintf("❌ **Task not found!**\n\nTask with ID `%d` doesn't exist or has been deleted. Please check the ID and try again.", taskID)
+		respContent := fmt.Sprintf("❌ %s\n\nTask with ID %s doesn't exist or has been deleted. Please check the ID and try again.", utils.Bold("Task not found!"), utils.InlineCode(fmt.Sprintf("%d", taskID)))
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -302,21 +303,21 @@ func (b *DiscordBot) getTaskCommand(s *discordgo.Session, i *discordgo.Interacti
 		return
 	}
 
-	respContent := fmt.Sprintf("📋 **Task #%d**\n\n*Title*: %s", task.ID, task.Title)
+	respContent := fmt.Sprintf("📋 %s\n\n%s: %s", utils.Bold(fmt.Sprintf("Task #%d", task.ID)), utils.Italic("Title"), task.Title)
 	if task.Description != "" {
-		respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
+		respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Description"), task.Description)
 	}
 	if task.Role != "" {
-		respContent += fmt.Sprintf("\n*Role*: %s", task.Role)
+		respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Role"), task.Role)
 	}
 	if len(task.AssignedUsers) > 0 {
-		respContent += "\n*Assigned to:*\n"
+		respContent += fmt.Sprintf("\n%s:\n", utils.Italic("Assigned to"))
 		for _, user := range task.AssignedUsers {
 			respContent += fmt.Sprintf("  - <@%s>\n", user.DiscordID)
 		}
 	}
-	respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
-	respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
+	respContent += fmt.Sprintf("\n%s: <@%s>", utils.Italic("Author"), task.Author.DiscordID)
+	respContent += fmt.Sprintf("\n%s: %s %s", utils.Italic("Status"), getStatusIcon(task.Status), task.Status)
 
 	fmt.Printf("[get-task] Retrieved task %d: %s\n", task.ID, respContent)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -378,7 +379,7 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 	}
 
 	if len(tasks) == 0 {
-		respContent := fmt.Sprintf("🔍 **No tasks found for role `%s`**\n\nThis role currently has no active tasks.", role)
+		respContent := fmt.Sprintf("🔍 %s\n\nThis role currently has no active tasks.", utils.Bold(fmt.Sprintf("No tasks found for role %s", utils.InlineCode(role))))
 		fmt.Printf("[get-tasks-by-role] No tasks found for role %s\n", role)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -390,22 +391,22 @@ func (b *DiscordBot) getTasksByRoleCommand(s *discordgo.Session, i *discordgo.In
 		return
 	}
 
-	respContent := fmt.Sprintf("📋 **Tasks for role `%s`:**\n", role)
+	respContent := fmt.Sprintf("📋 %s:\n", utils.Bold(fmt.Sprintf("Tasks for role %s", utils.InlineCode(role))))
 	for _, task := range tasks {
 		respContent += "--------------------------------\n"
-		respContent += fmt.Sprintf("*ID*: %d", task.ID)
-		respContent += fmt.Sprintf("\n*Title*: %s", task.Title)
+		respContent += fmt.Sprintf("%s: %d", utils.Italic("ID"), task.ID)
+		respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Title"), task.Title)
 		if task.Description != "" {
-			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
+			respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Description"), task.Description)
 		}
-		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
+		respContent += fmt.Sprintf("\n%s: <@%s>", utils.Italic("Author"), task.Author.DiscordID)
 		if len(task.AssignedUsers) > 0 {
-			respContent += "\n*Assigned to:*\n"
+			respContent += fmt.Sprintf("\n%s:\n", utils.Italic("Assigned to"))
 			for _, user := range task.AssignedUsers {
 				respContent += fmt.Sprintf("  - <@%s>\n", user.DiscordID)
 			}
 		}
-		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
+		respContent += fmt.Sprintf("\n%s: %s %s", utils.Italic("Status"), getStatusIcon(task.Status), task.Status)
 		respContent += "\n"
 	}
 
@@ -469,7 +470,7 @@ func (b *DiscordBot) getUnassignedTasksByRoleCommand(s *discordgo.Session, i *di
 	}
 
 	if len(tasks) == 0 {
-		respContent := fmt.Sprintf("🔍 **No unassigned tasks found for role `%s`**\n\nThis role currently has no unassigned tasks.", role)
+		respContent := fmt.Sprintf("🔍 %s\n\nThis role currently has no unassigned tasks.", utils.Bold(fmt.Sprintf("No unassigned tasks found for role %s", utils.InlineCode(role))))
 		fmt.Printf("[unassigned-tasks-by-role] No unassigned tasks found for role %s\n", role)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -481,16 +482,16 @@ func (b *DiscordBot) getUnassignedTasksByRoleCommand(s *discordgo.Session, i *di
 		return
 	}
 
-	respContent := fmt.Sprintf("📋 **Unassigned tasks for role `%s`:**\n", role)
+	respContent := fmt.Sprintf("📋 %s:\n", utils.Bold(fmt.Sprintf("Unassigned tasks for role %s", utils.InlineCode(role))))
 	for _, task := range tasks {
 		respContent += "--------------------------------\n"
-		respContent += fmt.Sprintf("*ID*: %d", task.ID)
-		respContent += fmt.Sprintf("\n*Title*: %s", task.Title)
+		respContent += fmt.Sprintf("%s: %d", utils.Italic("ID"), task.ID)
+		respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Title"), task.Title)
 		if task.Description != "" {
-			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
+			respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Description"), task.Description)
 		}
-		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
-		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
+		respContent += fmt.Sprintf("\n%s: <@%s>", utils.Italic("Author"), task.Author.DiscordID)
+		respContent += fmt.Sprintf("\n%s: %s %s", utils.Italic("Status"), getStatusIcon(task.Status), task.Status)
 		respContent += "\n"
 	}
 
@@ -519,7 +520,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ **Invalid options**\n\nYou must provide exactly two options (task ID and user ID).",
+				Content: fmt.Sprintf("⚠️ %s\n\nYou must provide exactly two options (task ID and user ID).", utils.Bold("Invalid options")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -542,7 +543,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ **Invalid user ID**\n\nYou must provide a valid user ID.",
+				Content: fmt.Sprintf("⚠️ %s\n\nYou must provide a valid user ID.", utils.Bold("Invalid user ID")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -578,7 +579,7 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		return
 	}
 
-	respContent := fmt.Sprintf("✅ **Task assigned successfully!**\n\n*Task ID*: `%d`\n*Assigned to*: <@%s>", taskID, userDiscordID)
+	respContent := fmt.Sprintf("✅ %s\n\n%s: %s\n%s: <@%s>", utils.Bold("Task assigned successfully!"), utils.Italic("Task ID"), utils.InlineCode(fmt.Sprintf("%d", taskID)), utils.Italic("Assigned to"), userDiscordID)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -592,11 +593,11 @@ func (b *DiscordBot) assignTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		fmt.Printf("[assign-task] Failed to get task: %v\n", err)
 		return
 	}
-	message := fmt.Sprintf("👋 Hi <@%s>! You have been assigned a new task:\n\n**%s**", userDiscordID, task.Title)
+	message := fmt.Sprintf("👋 Hi <@%s>! You have been assigned a new task:\n\n%s", userDiscordID, utils.Bold(task.Title))
 	if task.Description != "" {
 		message += fmt.Sprintf("\n%s", task.Description)
 	}
-	message += fmt.Sprintf("\n\n🔗 *Task ID*: `%d`", task.ID)
+	message += fmt.Sprintf("\n\n🔗 %s: %s", utils.Italic("Task ID"), utils.InlineCode(fmt.Sprintf("%d", task.ID)))
 	err = b.sendPrivateMessage(userDiscordID, message)
 	if err != nil {
 		fmt.Printf("[create-task] Failed to send private message to assignee: %v\n", err)
@@ -618,7 +619,7 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ **Invalid options**\n\nYou must provide exactly two options (task ID and status).",
+				Content: fmt.Sprintf("⚠️ %s\n\nYou must provide exactly two options (task ID and status).", utils.Bold("Invalid options")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -642,7 +643,7 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ **Invalid status**\n\nYou must provide a valid status string.",
+				Content: fmt.Sprintf("⚠️ %s\n\nYou must provide a valid status string.", utils.Bold("Invalid status")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -658,14 +659,14 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("❌ **Failed to update task status**\n\n%s", err.Error()),
+				Content: fmt.Sprintf("❌ %s\n\n%s", utils.Bold("Failed to update task status"), err.Error()),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
 	}
 
-	respContent := fmt.Sprintf("✅ **Task status updated successfully!**\n\n*Task ID*: `%d`\n*Title*: %s\n*New Status*: %s %s", taskID, task.Title, getStatusIcon(status), status)
+	respContent := fmt.Sprintf("✅ %s\n\n%s: %s\n%s: %s\n%s: %s %s", utils.Bold("Task status updated successfully!"), utils.Italic("Task ID"), utils.InlineCode(fmt.Sprintf("%d", taskID)), utils.Italic("Title"), task.Title, utils.Italic("New Status"), getStatusIcon(status), status)
 	fmt.Printf("[update-task-status] Task %d status updated to: %s\n", taskID, status)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -680,9 +681,12 @@ func (b *DiscordBot) updateTaskStatusCommand(s *discordgo.Session, i *discordgo.
 	// Notify all assigned users about the status update
 	for _, user := range allUsers {
 		message := fmt.Sprintf(
-			"📢 **Task Status Update**\n\nYour task has been updated:\n\n**%s**\n\n🔗 *Task ID*: `%d`\n📊 *New Status*: %s %s\n\nUpdated by: <@%s>",
-			task.Title,
-			task.ID,
+			"📢 %s\n\nYour task has been updated:\n\n%s\n\n🔗 %s: %s\n📊 %s: %s %s\n\nUpdated by: <@%s>",
+			utils.Bold("Task Status Update"),
+			utils.Bold(task.Title),
+			utils.Italic("Task ID"),
+			utils.InlineCode(fmt.Sprintf("%d", task.ID)),
+			utils.Italic("New Status"),
 			getStatusIcon(status),
 			status,
 			i.Member.User.ID)
@@ -732,7 +736,7 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 	tasks, err := b.db.GetCompletedTasksByRole(role)
 	if err != nil {
 		fmt.Printf("[completed-tasks-by-role] Failed to get tasks: %v\n", err)
-		respContent := fmt.Sprintf("❌ **Failed to retrieve completed tasks for role `%s`**\n\nAn error occurred while fetching tasks. Please try again or contact an administrator.", role)
+		respContent := fmt.Sprintf("❌ %s\n\nAn error occurred while fetching tasks. Please try again or contact an administrator.", utils.Bold(fmt.Sprintf("Failed to retrieve completed tasks for role %s", utils.InlineCode(role))))
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -744,7 +748,7 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 	}
 
 	if len(tasks) == 0 {
-		respContent := fmt.Sprintf("🔍 **No completed tasks found for role `%s`**\n\nThis role currently has no completed tasks.", role)
+		respContent := fmt.Sprintf("🔍 %s\n\nThis role currently has no completed tasks.", utils.Bold(fmt.Sprintf("No completed tasks found for role %s", utils.InlineCode(role))))
 		fmt.Printf("[completed-tasks-by-role] No completed tasks found for role %s\n", role)
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -756,22 +760,22 @@ func (b *DiscordBot) getCompletedTasksByRoleCommand(s *discordgo.Session, i *dis
 		return
 	}
 
-	respContent := fmt.Sprintf("✅ **Completed tasks for role `%s`:**\n", role)
+	respContent := fmt.Sprintf("✅ %s:\n", utils.Bold(fmt.Sprintf("Completed tasks for role %s", utils.InlineCode(role))))
 	for _, task := range tasks {
 		respContent += "--------------------------------\n"
-		respContent += fmt.Sprintf("*ID*: %d", task.ID)
-		respContent += fmt.Sprintf("\n*Title*: %s", task.Title)
+		respContent += fmt.Sprintf("%s: %d", utils.Italic("ID"), task.ID)
+		respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Title"), task.Title)
 		if task.Description != "" {
-			respContent += fmt.Sprintf("\n*Description*: %s", task.Description)
+			respContent += fmt.Sprintf("\n%s: %s", utils.Italic("Description"), task.Description)
 		}
-		respContent += fmt.Sprintf("\n*Author*: <@%s>", task.Author.DiscordID)
+		respContent += fmt.Sprintf("\n%s: <@%s>", utils.Italic("Author"), task.Author.DiscordID)
 		if len(task.AssignedUsers) > 0 {
-			respContent += "\n*Assigned to:*\n"
+			respContent += fmt.Sprintf("\n%s:\n", utils.Italic("Assigned to"))
 			for _, user := range task.AssignedUsers {
 				respContent += fmt.Sprintf("  - <@%s>\n", user.DiscordID)
 			}
 		}
-		respContent += fmt.Sprintf("\n*Status*: %s %s", getStatusIcon(task.Status), task.Status)
+		respContent += fmt.Sprintf("\n%s: %s %s", utils.Italic("Status"), getStatusIcon(task.Status), task.Status)
 		respContent += "\n"
 	}
 
@@ -800,7 +804,7 @@ func (b *DiscordBot) deleteTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "⚠️ **Invalid options**\n\nYou must provide exactly one option (task ID).",
+				Content: fmt.Sprintf("⚠️ %s\n\nYou must provide exactly one option (task ID).", utils.Bold("Invalid options")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -816,7 +820,7 @@ func (b *DiscordBot) deleteTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ **Failed to delete task**\n\nAn error occurred while retrieving task details. Please try again or contact an administrator.",
+				Content: fmt.Sprintf("❌ %s\n\nAn error occurred while retrieving task details. Please try again or contact an administrator.", utils.Bold("Failed to delete task")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -829,14 +833,14 @@ func (b *DiscordBot) deleteTaskCommand(s *discordgo.Session, i *discordgo.Intera
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ **Failed to delete task**\n\nAn error occurred while deleting the task. Please try again or contact an administrator.",
+				Content: fmt.Sprintf("❌ %s\n\nAn error occurred while deleting the task. Please try again or contact an administrator.", utils.Bold("Failed to delete task")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
 	}
 
-	respContent := fmt.Sprintf("✅ **Task deleted successfully!**\n\n*Task ID*: `%d`", taskID)
+	respContent := fmt.Sprintf("✅ %s\n\n%s: %s", utils.Bold("Task deleted successfully!"), utils.Italic("Task ID"), utils.InlineCode(fmt.Sprintf("%d", taskID)))
 	fmt.Printf("[delete-task] Task %d deleted successfully\n", taskID)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -852,9 +856,11 @@ func (b *DiscordBot) deleteTaskCommand(s *discordgo.Session, i *discordgo.Intera
 
 	for _, user := range allUsers {
 		message := fmt.Sprintf(
-			"🗑️ **Task Deleted**\n\nA task you were involved with has been deleted:\n\n**%s**\n\n🔗 *Task ID*: `%d`\n\nDeleted by: <@%s>",
-			task.Title,
-			task.ID,
+			"🗑️ %s\n\nA task you were involved with has been deleted:\n\n%s\n\n🔗 %s: %s\n\nDeleted by: <@%s>",
+			utils.Bold("Task Deleted"),
+			utils.Bold(task.Title),
+			utils.Italic("Task ID"),
+			utils.InlineCode(fmt.Sprintf("%d", task.ID)),
 			i.Member.User.ID)
 
 		err = b.sendPrivateMessage(user.DiscordID, message)
@@ -907,7 +913,7 @@ func (b *DiscordBot) subscribeChannelToPushWebhookCommand(s *discordgo.Session, 
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Content: "✅ **Channel already subscribed to push webhook**\n\nThe channel is already subscribed to the push webhook for the repository.",
+					Content: fmt.Sprintf("✅ %s\n\nThe channel is already subscribed to the push webhook for the repository.", utils.Bold("Channel already subscribed to push webhook")),
 					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
@@ -917,14 +923,14 @@ func (b *DiscordBot) subscribeChannelToPushWebhookCommand(s *discordgo.Session, 
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ **Failed to subscribe channel to push**\n\nAn error occurred while subscribing the channel to the push webhook. Please try again or contact an administrator.",
+				Content: fmt.Sprintf("❌ %s\n\nAn error occurred while subscribing the channel to the push webhook. Please try again or contact an administrator.", utils.Bold("Failed to subscribe channel to push")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
 	}
 
-	respContent := fmt.Sprintf("✅ **Channel subscribed to push webhook for repository `%s`**\n\n*Repository*: `%s`\n*Channel*: `%s`", repo, repo, i.ChannelID)
+	respContent := fmt.Sprintf("✅ %s\n\n%s: %s\n%s: %s", utils.Bold(fmt.Sprintf("Channel subscribed to push webhook for repository %s", utils.InlineCode(repo))), utils.Italic("Repository"), utils.InlineCode(repo), utils.Italic("Channel"), utils.InlineCode(i.ChannelID))
 	fmt.Printf("[subscribe-channel-to-push] Channel %s subscribed to push webhook for repository %s\n", i.ChannelID, repo)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -976,14 +982,14 @@ func (b *DiscordBot) unsubscribeChannelFromPushWebhookCommand(s *discordgo.Sessi
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ **Failed to unsubscribe channel from push**\n\nAn error occurred while unsubscribing the channel from the push webhook. Please try again or contact an administrator.",
+				Content: fmt.Sprintf("❌ %s\n\nAn error occurred while unsubscribing the channel from the push webhook. Please try again or contact an administrator.", utils.Bold("Failed to unsubscribe channel from push")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
 	}
 
-	respContent := fmt.Sprintf("✅ **Channel unsubscribed from push webhook for repository `%s`**\n\n*Repository*: `%s`\n*Channel*: `%s`", repo, repo, i.ChannelID)
+	respContent := fmt.Sprintf("✅ %s\n\n%s: %s\n%s: %s", utils.Bold(fmt.Sprintf("Channel unsubscribed from push webhook for repository %s", utils.InlineCode(repo))), utils.Italic("Repository"), utils.InlineCode(repo), utils.Italic("Channel"), utils.InlineCode(i.ChannelID))
 	fmt.Printf("[unsubscribe-channel-from-push] Channel %s unsubscribed from push webhook for repository %s\n", i.ChannelID, repo)
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -1008,16 +1014,16 @@ func (b *DiscordBot) getSubscriptionsOfChannelCommand(s *discordgo.Session, i *d
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ **Failed to get webhook subscriptions by repository**\n\nAn error occurred while fetching the webhook subscriptions. Please try again or contact an administrator.",
+				Content: fmt.Sprintf("❌ %s\n\nAn error occurred while fetching the webhook subscriptions. Please try again or contact an administrator.", utils.Bold("Failed to get webhook subscriptions by repository")),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
 	}
 
-	respContent := "🔍 **Subscriptions of channel:**\n\n"
+	respContent := fmt.Sprintf("🔍 %s\n\n", utils.Bold("Subscriptions of channel:"))
 	for _, subscription := range subscriptions {
-		respContent += fmt.Sprintf("*Repository*: `%s`\n", subscription.Repository.Name)
+		respContent += fmt.Sprintf("%s: %s\n", utils.Italic("Repository"), utils.InlineCode(subscription.Repository.Name))
 	}
 
 	fmt.Printf("[get-subscriptions-of-channel] Retrieved %d webhook subscriptions for channel %s\n", len(subscriptions), i.ChannelID)
