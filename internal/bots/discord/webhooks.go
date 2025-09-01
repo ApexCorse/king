@@ -2,10 +2,13 @@ package discord
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/Formula-SAE/discord/internal/utils"
 )
 
 type Author struct {
@@ -72,20 +75,21 @@ func (b *DiscordBot) onPushWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func formatStandardPush(payload *PushEvent) string {
-	msg := "🚀 **New push in repository**: `" + payload.Repository.Name + "`\n"
-	msg += "🌿 **Branch**: `" + getBranchName(payload.Ref) + "`"
+	msg := fmt.Sprintf("🚀 %s: %s\n", utils.Bold("New push in repository"), utils.InlineCode(payload.Repository.Name))
+	branchLine := fmt.Sprintf("🌿 %s: %s", utils.Bold("Branch"), utils.InlineCode(getBranchName(payload.Ref)))
 	if payload.Created {
-		msg += "(🆕 *NEW BRANCH*)\n"
+		branchLine += fmt.Sprintf("(%s %s)\n", "🆕", utils.Italic("NEW BRANCH"))
 	} else {
-		msg += "\n"
+		branchLine += "\n"
 	}
-	msg += "👤 **Author**: `" + payload.Pusher.Name + "`\n"
+	msg += branchLine
+	msg += fmt.Sprintf("👤 %s: %s\n", utils.Bold("Author"), utils.InlineCode(payload.Pusher.Name))
 	if payload.Forced {
-		msg += "⚠️ **FORCED PUSH**\n"
+		msg += fmt.Sprintf("⚠️ %s\n", utils.Bold("FORCED PUSH"))
 	}
 	msg += "\n"
 
-	msg += "📝 **Commits**:\n"
+	msg += fmt.Sprintf("📝 %s:\n", utils.Bold("Commits"))
 	for i, commit := range payload.Commits {
 		msg += getCommitMessage(
 			commit.Message,
@@ -100,16 +104,16 @@ func formatStandardPush(payload *PushEvent) string {
 }
 
 func formatBranchCreated(payload *PushEvent) string {
-	msg := "🚀 **New branch created**: `" + payload.Repository.Name + "`\n"
-	msg += "🌿 **Branch**: `" + getBranchName(payload.Ref) + "`\n"
-	msg += "👤 **Author**: `" + payload.Pusher.Name + "`\n"
+	msg := fmt.Sprintf("🚀 %s: %s\n", utils.Bold("New branch created"), utils.InlineCode(payload.Repository.Name))
+	msg += fmt.Sprintf("🌿 %s: %s\n", utils.Bold("Branch"), utils.InlineCode(getBranchName(payload.Ref)))
+	msg += fmt.Sprintf("👤 %s: %s\n", utils.Bold("Author"), utils.InlineCode(payload.Pusher.Name))
 	return msg
 }
 
 func formatBranchDeleted(payload *PushEvent) string {
-	msg := "🗑️ **Branch deleted**: `" + payload.Repository.Name + "`\n"
-	msg += "🌿 **Branch**: `" + getBranchName(payload.Ref) + "`\n"
-	msg += "👤 **Author**: `" + payload.Pusher.Name + "`\n"
+	msg := fmt.Sprintf("🗑️ %s: %s\n", utils.Bold("Branch deleted"), utils.InlineCode(payload.Repository.Name))
+	msg += fmt.Sprintf("🌿 %s: %s\n", utils.Bold("Branch"), utils.InlineCode(getBranchName(payload.Ref)))
+	msg += fmt.Sprintf("👤 %s: %s\n", utils.Bold("Author"), utils.InlineCode(payload.Pusher.Name))
 	return msg
 }
 
@@ -127,8 +131,8 @@ func getCommitMessage(commit string, link string, author string) string {
 	}
 	title := parts[0]
 
-	msg := "  🔸 [" + title + "](" + link + ")\n"
-	msg += "     ✍️ " + author
+	msg := fmt.Sprintf("  🔸 %s\n", utils.Link(title, link))
+	msg += fmt.Sprintf("     ✍️ %s", author)
 
 	if len(parts) == 2 {
 		msg += "\n\n" + parts[1]
