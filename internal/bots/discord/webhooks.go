@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type Author struct {
@@ -24,6 +25,8 @@ type PushEvent struct {
 		URL       string `json:"url"`
 		Author    Author `json:"author"`
 	} `json:"commits"`
+	Deleted bool `json:"deleted"`
+	Created bool `json:"created"`
 }
 
 func (b *DiscordBot) onPushWebhook(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +43,15 @@ func (b *DiscordBot) onPushWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Received push event:\n%+v", payload)
 
-	msg := formatPushEvent(payload)
+	var msg string
+	if payload.Deleted {
+		msg = formatBranchDeleted(payload)
+	} else if len(payload.Commits) == 0 {
+		msg = formatBranchCreated(payload)
+	} else {
+		msg = formatStandardPush(payload)
+	}
+
 	log.Printf("Formatted push event: %s", msg)
 
 	subscriptions, err := b.db.GetWebhookSubscriptionsByRepository(payload.Repository.Name)
@@ -60,29 +71,68 @@ func (b *DiscordBot) onPushWebhook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func formatPushEvent(payload *PushEvent) string {
+func formatStandardPush(payload *PushEvent) string {
 	msg := "🚀 **New push in repository**: `" + payload.Repository.Name + "`\n"
-	msg += "🌿 **Branch**: `" + payload.Ref + "`\n"
+	msg += "🌿 **Branch**: `" + getBranchName(payload.Ref) + "`"
+	if payload.Created {
+		msg += "(🆕 *NEW BRANCH*)\n"
+	} else {
+		msg += "\n"
+	}
 	msg += "👤 **Author**: `" + payload.Pusher.Name + "`\n"
 	if payload.Forced {
-		msg += "⚠️ **Force Push**: `Yes`\n"
-	} else {
-		msg += "✅ **Force Push**: `No`\n"
+		msg += "⚠️ **FORCED PUSH**\n"
 	}
 	msg += "\n"
-	if len(payload.Commits) == 0 {
-		msg += "📝 **No commits in this push.**"
-	} else {
-		msg += "📝 **Commits**:\n"
-		for i, commit := range payload.Commits {
-			msg +=
-				"  " +
-					"🔸 [" + commit.Message + "](" + commit.URL + ")\n" +
-					"     ✍️ " + commit.Author.Name + "\n"
-			if i < len(payload.Commits)-1 {
-				msg += "\n"
-			}
+
+	msg += "📝 **Commits**:\n"
+	for i, commit := range payload.Commits {
+		msg += getCommitMessage(
+			commit.Message,
+			commit.URL,
+			commit.Author.Name,
+		)
+		if i < len(payload.Commits)-1 {
+			msg += "\n"
 		}
 	}
+	return msg
+}
+
+func formatBranchCreated(payload *PushEvent) string {
+	msg := "🚀 **New branch created**: `" + payload.Repository.Name + "`\n"
+	msg += "🌿 **Branch**: `" + getBranchName(payload.Ref) + "`\n"
+	msg += "👤 **Author**: `" + payload.Pusher.Name + "`\n"
+	return msg
+}
+
+func formatBranchDeleted(payload *PushEvent) string {
+	msg := "🗑️ **Branch deleted**: `" + payload.Repository.Name + "`\n"
+	msg += "🌿 **Branch**: `" + getBranchName(payload.Ref) + "`\n"
+	msg += "👤 **Author**: `" + payload.Pusher.Name + "`\n"
+	return msg
+}
+
+func getBranchName(ref string) string {
+	if after, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+		return after
+	}
+	return ref
+}
+
+func getCommitMessage(commit string, link string, author string) string {
+	parts := strings.SplitN(commit, "\n\n", 2)
+	if len(parts) == 0 {
+		return ""
+	}
+	title := parts[0]
+
+	msg := "  🔸 [" + title + "](" + link + ")\n"
+	msg += "     ✍️ " + author
+
+	if len(parts) == 2 {
+		msg += "\n\n" + parts[1]
+	}
+
 	return msg
 }
