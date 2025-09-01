@@ -12,17 +12,18 @@ import (
 
 // Command name constants
 const (
-	CommandCreateTask                    = "create-task"
-	CommandAssignedTasks                 = "assigned-tasks"
-	CommandGetTask                       = "get-task"
-	CommandGetTasksByRole                = "get-tasks-by-role"
-	CommandUnassignedTasksByRole         = "unassigned-tasks-by-role"
-	CommandAssignTask                    = "assign-task"
-	CommandUpdateTaskStatus              = "update-task-status"
-	CommandCompletedTasksByRole          = "completed-tasks-by-role"
-	CommandDeleteTask                    = "delete-task"
-	CommandSubscribeChannelToPush        = "subscribe-channel-to-push"
-	CommandUnsubscribeChannelFromPush    = "unsubscribe-channel-from-push"
+	CommandCreateTask                 = "create-task"
+	CommandAssignedTasks              = "assigned-tasks"
+	CommandGetTask                    = "get-task"
+	CommandGetTasksByRole             = "get-tasks-by-role"
+	CommandUnassignedTasksByRole      = "unassigned-tasks-by-role"
+	CommandAssignTask                 = "assign-task"
+	CommandUpdateTaskStatus           = "update-task-status"
+	CommandCompletedTasksByRole       = "completed-tasks-by-role"
+	CommandDeleteTask                 = "delete-task"
+	CommandSubscribeChannelToPush     = "subscribe-channel-to-push"
+	CommandUnsubscribeChannelFromPush = "unsubscribe-channel-from-push"
+	CommandGetSubscriptionsOfChannel  = "get-subscriptions"
 )
 
 func (b *DiscordBot) createTaskCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -988,6 +989,43 @@ func (b *DiscordBot) unsubscribeChannelFromPushWebhookCommand(s *discordgo.Sessi
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: respContent,
+		},
+	})
+}
+
+func (b *DiscordBot) getSubscriptionsOfChannelCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	if i.ApplicationCommandData().Name != CommandGetSubscriptionsOfChannel {
+		return
+	}
+
+	subscriptions, err := b.db.GetWebhookSubscriptionsByRepository(i.ChannelID)
+	if err != nil {
+		fmt.Printf("[get-subscriptions-of-channel] Failed to get webhook subscriptions by repository: %v\n", err)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ **Failed to get webhook subscriptions by repository**\n\nAn error occurred while fetching the webhook subscriptions. Please try again or contact an administrator.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	respContent := "🔍 **Subscriptions of channel:**\n\n"
+	for _, subscription := range subscriptions {
+		respContent += fmt.Sprintf("*Repository*: `%s`\n", subscription.Repository.Name)
+	}
+
+	fmt.Printf("[get-subscriptions-of-channel] Retrieved %d webhook subscriptions for channel %s\n", len(subscriptions), i.ChannelID)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: respContent,
+			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
 }

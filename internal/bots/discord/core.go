@@ -74,6 +74,7 @@ func (b *DiscordBot) initCommandHandlers() {
 	b.session.AddHandler(b.subscribeChannelToPushWebhookCommand)
 	b.session.AddHandler(b.unsubscribeChannelFromPushWebhookCommand)
 	b.session.AddHandler(b.deleteTaskCommand)
+	b.session.AddHandler(b.getSubscriptionsOfChannelCommand)
 }
 
 func (b *DiscordBot) initCommands(githubRepoNames []string) error {
@@ -255,6 +256,10 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 					Required:    true,
 				},
 			},
+		},
+		{
+			Name:        CommandGetSubscriptionsOfChannel,
+			Description: "Get all subscriptions of the current channel",
 		},
 	}
 
