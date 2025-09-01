@@ -87,7 +87,7 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 
 	commands := []*discordgo.ApplicationCommand{
 		{
-			Name:        "create-task",
+			Name:        CommandCreateTask,
 			Description: "Create a new task to assign to a member",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -117,11 +117,11 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 			},
 		},
 		{
-			Name:        "assigned-tasks",
+			Name:        CommandAssignedTasks,
 			Description: "Get all tasks assigned to the current user",
 		},
 		{
-			Name:        "get-task",
+			Name:        CommandGetTask,
 			Description: "Get a task by its ID",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -133,7 +133,7 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 			},
 		},
 		{
-			Name:        "get-tasks-by-role",
+			Name:        CommandGetTasksByRole,
 			Description: "Get all tasks for a specific role",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -145,7 +145,7 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 			},
 		},
 		{
-			Name:        "unassigned-tasks-by-role",
+			Name:        CommandUnassignedTasksByRole,
 			Description: "Get all unassigned tasks for a specific role",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -157,7 +157,7 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 			},
 		},
 		{
-			Name:        "assign-task",
+			Name:        CommandAssignTask,
 			Description: "Assign a task to a user",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -175,7 +175,7 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 			},
 		},
 		{
-			Name:        "update-task-status",
+			Name:        CommandUpdateTaskStatus,
 			Description: "Update the status of a task",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -207,7 +207,7 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 			},
 		},
 		{
-			Name:        "completed-tasks-by-role",
+			Name:        CommandCompletedTasksByRole,
 			Description: "Get all completed tasks for a specific role",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -219,7 +219,7 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 			},
 		},
 		{
-			Name:        "subscribe-channel-to-push",
+			Name:        CommandSubscribeChannelToPush,
 			Description: "Subscribe a channel to push webhook for a repository",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -232,7 +232,7 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 			},
 		},
 		{
-			Name:        "unsubscribe-channel-from-push",
+			Name:        CommandUnsubscribeChannelFromPush,
 			Description: "Unsubscribe a channel from push webhook for a repository",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
@@ -245,7 +245,7 @@ func (b *DiscordBot) initCommands(githubRepoNames []string) error {
 			},
 		},
 		{
-			Name:        "delete-task",
+			Name:        CommandDeleteTask,
 			Description: "Delete a task by its ID",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
