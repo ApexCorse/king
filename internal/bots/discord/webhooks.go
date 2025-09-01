@@ -78,7 +78,7 @@ func formatStandardPush(payload *PushEvent) string {
 	msg := fmt.Sprintf("🚀 %s: %s\n", utils.Bold("New push in repository"), utils.InlineCode(payload.Repository.Name))
 	branchLine := fmt.Sprintf("🌿 %s: %s", utils.Bold("Branch"), utils.InlineCode(getBranchName(payload.Ref)))
 	if payload.Created {
-		branchLine += fmt.Sprintf("(%s %s)\n", "🆕", utils.Italic("NEW BRANCH"))
+		branchLine += fmt.Sprintf(" (🆕 %s)\n", utils.Italic("NEW BRANCH"))
 	} else {
 		branchLine += "\n"
 	}
